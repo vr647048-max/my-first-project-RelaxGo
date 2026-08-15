@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RelaxGo — Home Massage</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#f6f8f7;color:#17221d}
+a{text-decoration:none;color:inherit}
+header{background:#fff;position:sticky;top:0;z-index:10;border-bottom:1px solid #e8ece9}
+.nav{max-width:1100px;margin:auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:25px;font-weight:800;color:#087f5b}.logo span{color:#17221d}
+.navbtn{background:#087f5b;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700}
+.hero{background:linear-gradient(135deg,#e7fff5,#f8fffc);padding:55px 18px 45px}
+.hero-inner{max-width:1100px;margin:auto;display:grid;grid-template-columns:1.1fr .9fr;gap:35px;align-items:center}
+.badge{display:inline-block;background:#d7f7ea;color:#087f5b;padding:7px 12px;border-radius:20px;font-size:13px;font-weight:700;margin-bottom:15px}
+h1{font-size:48px;line-height:1.05;margin-bottom:16px}
+.hero p{font-size:18px;line-height:1.6;color:#56625d;margin-bottom:22px}
+.actions{display:flex;gap:12px;flex-wrap:wrap}
+.primary,.secondary{padding:14px 20px;border-radius:12px;font-weight:800;display:inline-block}
+.primary{background:#087f5b;color:white}.secondary{background:white;border:1px solid #dce5e0}
+.hero-card{background:#fff;border-radius:22px;padding:25px;box-shadow:0 15px 45px #0b3d2b18}
+.hero-card h3{font-size:22px;margin-bottom:18px}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.quick div{background:#f3f8f5;border-radius:14px;padding:16px}
+.quick b{display:block;margin-bottom:5px}.quick span{font-size:13px;color:#64716b}
+section{max-width:1100px;margin:auto;padding:55px 18px}
+.section-title{text-align:center;font-size:31px;margin-bottom:28px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:#fff;border:1px solid #e8eeeb;border-radius:18px;padding:23px;box-shadow:0 8px 25px #153d2b08}
+.icon{font-size:34px;margin-bottom:13px}.card h3{margin-bottom:8px}.card p{color:#65716c;line-height:1.5;font-size:14px}.price{margin-top:15px;font-size:19px;font-weight:800;color:#087f5b}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.step{text-align:center;padding:20px}.num{width:42px;height:42px;margin:0 auto 12px;background:#087f5b;color:#fff;border-radius:50%;display:grid;place-items:center;font-weight:800}
+.booking{background:#10251e;color:white;border-radius:24px;padding:30px}
+.booking h2{font-size:30px;margin-bottom:8px}.booking p{color:#c9d8d2;margin-bottom:20px}
+form{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+input,select,textarea{width:100%;padding:14px;border-radius:10px;border:1px solid #dbe5e0;font-size:15px}
+textarea{grid-column:1/-1;min-height:85px}.full{grid-column:1/-1}
+.submit{border:0;background:#22b783;color:#fff;padding:15px;border-radius:11px;font-size:16px;font-weight:800;cursor:pointer}
+footer{background:#fff;border-top:1px solid #e7ece9;padding:25px 18px;text-align:center;color:#68746f;font-size:13px}
+@media(max-width:750px){h1{font-size:38px}.hero-inner{grid-template-columns:1fr}.cards,.steps{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}form{grid-template-columns:1fr}textarea,.full{grid-column:auto}.navbtn{padding:9px 12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="logo">Relax<span>Go</span></div>
+    <a class="navbtn" href="tel:+91724846322">📞 Call Now</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="badge">HOME MASSAGE • ON-DEMAND SERVICE</div>
+      <h1>Massage service,<br>सीधे आपके घर पर.</h1>
+      <p>App जैसी आसान booking. Service चुनें, अपना location दें और therapist को आपके convenient time पर बुलाएँ.</p>
+      <div class="actions">
+        <a class="primary" href="#booking">Book a Massage</a>
+        <a class="secondary" href="tel:+91724846322">📞 Call for Booking</a>
+      </div>
+    </div>
+    <div class="hero-card">
+      <h3>⚡ Quick Booking</h3>
+      <div class="quick">
+        <div><b>🏠 At Home</b><span>आपके location पर</span></div>
+        <div><b>⏰ Flexible</b><span>अपना समय चुनें</span></div>
+        <div><b>📱 Easy Call</b><span>फोन से booking</span></div>
+        <div><b>⭐ Trusted</b><span>Verified professionals</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+<h2 class="section-title">Our Services</h2>
+<div class="cards">
+  <div class="card"><div class="icon">💆</div><h3>Relaxation Massage</h3><p>तनाव कम करने और आराम के लिए professional massage.</p><div class="price">₹999 / session</div></div>
+  <div class="card"><div class="icon">🌿</div><h3>Aroma Wellness</h3><p>Calming wellness experience with aroma-based relaxation.</p><div class="price">₹1,299 / session</div></div>
+  <div class="card"><div class="icon">🧘</div><h3>Body Wellness</h3><p>Daily fatigue और body relaxation के लिए wellness session.</p><div class="price">₹1,199 / session</div></div>
+</div>
+</section>
+
+<section>
+<h2 class="section-title">How It Works</h2>
+<div class="steps">
+  <div class="step"><div class="num">1</div><h3>Book</h3><p>Service और preferred time चुनें.</p></div>
+  <div class="step"><div class="num">2</div><h3>Confirm</h3><p>हम call करके booking confirm करेंगे.</p></div>
+  <div class="step"><div class="num">3</div><h3>Relax</h3><p>Professional आपके दिए location पर आएगा.</p></div>
+</div>
+</section>
+
+<section id="booking">
+<div class="booking">
+<h2>Book Your Session</h2>
+<p>Details भरें — booking request सीधे WhatsApp पर भेजी जाएगी.</p>
+<form onsubmit="sendWhatsApp(event)">
+  <input id="name" required placeholder="आपका नाम">
+  <input id="phone" required type="tel" placeholder="Mobile Number">
+  <select id="service" required>
+    <option value="">Service चुनें</option>
+    <option>Relaxation Massage</option>
+    <option>Aroma Wellness</option>
+    <option>Body Wellness</option>
+  </select>
+  <input id="date" required type="date">
+  <input id="time" required type="time">
+  <input id="location" required placeholder="Service Location / Area">
+  <textarea id="note" placeholder="Extra note (optional)"></textarea>
+  <button class="submit full" type="submit">Confirm Booking on WhatsApp</button>
+</form>
+</div>
+</section>
+
+<footer>
+© 2026 RelaxGo • Home Wellness Service • Replace the demo phone number before launch.
+</footer>
+
+<script>
+function sendWhatsApp(e){
+  e.preventDefault();
+  const n=document.getElementById('name').value;
+  const p=document.getElementById('phone').value;
+  const s=document.getElementById('service').value;
+  const d=document.getElementById('date').value;
+  const t=document.getElementById('time').value;
+  const l=document.getElementById('location').value;
+  const note=document.getElementById('note').value;
+  const msg=`New Booking Request%0A%0AName: ${encodeURIComponent(n)}%0AMobile: ${encodeURIComponent(p)}%0AService: ${encodeURIComponent(s)}%0ADate: ${encodeURIComponent(d)}%0ATime: ${encodeURIComponent(t)}%0ALocation: ${encodeURIComponent(l)}%0ANote: ${encodeURIComponent(note)}`;
+  window.open('https://wa.me/919999999999?text='+msg,'_blank');
+}
+</script>
+</body>
+</html>
