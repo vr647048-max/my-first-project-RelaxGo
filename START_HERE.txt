@@ -1,0 +1,82 @@
+THERAPYONWAY — FINAL VERIFIED BUILD
+===================================
+
+IMPORTANT: Use this complete folder as-is. Do not mix JS/HTML/SQL files from older builds.
+
+0) OPTIONAL — QUICK DIAGNOSTIC
+--------------------------------
+Open DIAGNOSTICS.html after starting the local server. It checks the browser setup and the tracking database function without creating a booking.
+
+1) SUPABASE — DO THIS FIRST
+----------------------------
+Open Supabase -> SQL Editor.
+Open schema.sql from this folder.
+Copy ALL of schema.sql -> paste into SQL Editor -> Run.
+Wait for the success message.
+
+FIX_BOOKING_CODE.sql contains the SAME migration as schema.sql.
+Do not run old SQL from an older TherapyOnWay ZIP.
+
+2) PROVIDER LOGIN
+-----------------
+Supabase -> Authentication -> Users -> create the provider email/password.
+Use that exact email/password on admin.html.
+
+3) CONFIG
+---------
+config.js contains the Supabase project URL, publishable key and provider phone.
+Provider phone is configured as +917248846322.
+Never put a service-role/secret key in config.js.
+
+4) RUN WEBSITE LOCALLY / TEST ON COMPUTER + SAME-WIFI PHONE
+----------------------------------------------------------
+You no longer need to type the server command manually.
+Double-click START_SERVER.bat in this folder.
+
+The black window will show the computer IP and the three useful addresses.
+Keep that black window open while testing.
+
+On the computer use:
+    http://127.0.0.1:8000/
+
+On another device connected to the SAME Wi-Fi use the IP shown by START_SERVER.bat, for example:
+    http://192.168.1.37:8000/
+
+OPEN_CUSTOMER.bat opens the customer page on the computer.
+OPEN_ADMIN.bat opens the provider dashboard.
+OPEN_TRACK.bat opens the tracking page.
+
+IMPORTANT: Mobile GPS requires a secure HTTPS website (or localhost). The local
+192.168.x.x test address is useful for checking that the phone can reach the site,
+but Chrome may block GPS on that plain HTTP address. The final public site must
+be hosted on HTTPS for customer/provider GPS to work reliably on phones.
+
+5) COMPLETE TEST ORDER
+----------------------
+Customer -> Book a Massage
+-> choose service
+-> name + 10-digit phone
+-> future date/time
+-> Use my location
+-> wait for Location captured
+-> Confirm Booking
+-> save TOW-xxxxxx
+-> Track Booking
+
+Provider -> admin.html
+-> login
+-> booking should show New
+-> click Accepted
+-> click On the Way
+-> live GPS sharing starts automatically (allow Location if Chrome asks)
+-> click Arrived
+-> click Complete
+
+Customer tracking should update automatically.
+
+6) IF TRACKING SAYS DATABASE SETUP IS INCOMPLETE
+------------------------------------------------
+That means schema.sql has not been run in the correct Supabase project yet.
+Run the COMPLETE schema.sql in Supabase SQL Editor, then refresh.
+
+DO NOT paste schema.sql into Chrome's address bar.

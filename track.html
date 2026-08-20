@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TherapyOnWay | Track Booking</title><link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head><body class="dashboard"><header class="topbar"><a class="brand" href="index.html">Therapy<span>OnWay</span></a><a class="nav-call" href="index.html">Book another</a></header>
+<main class="track-page"><div class="track-box"><div class="pill">LIVE BOOKING</div><h1>Track your provider</h1><p id="trackText">Enter your booking ID to see status and provider location when the provider starts sharing GPS.</p>
+<div class="track-form wide"><input id="bookingId" placeholder="RG-123456"><button class="btn primary" onclick="startTracking()">Track</button></div>
+<div id="statusCard" class="status-card hidden"></div><div id="map"></div></div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>if(!window.supabase){document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>')}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="config.js"></script><script src="track.js"></script></body></html>

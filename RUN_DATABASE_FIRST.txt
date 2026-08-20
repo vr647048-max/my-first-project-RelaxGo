@@ -1,0 +1,25 @@
+THERAPYONWAY — IMPORTANT FIRST STEP
+
+The website files are fixed, but tracking cannot work until Supabase has the
+latest database function. The browser cannot create that function itself.
+
+DO THIS ONCE:
+1. Open Chrome.
+2. Open your Supabase project.
+3. Click SQL Editor.
+4. Open the file named schema.sql from this TherapyOnWay folder.
+5. Copy ALL of schema.sql.
+6. Paste it into Supabase SQL Editor.
+7. Click Run.
+8. Wait for the success message.
+9. Refresh the TherapyOnWay website.
+
+DO NOT paste schema.sql into Chrome's address bar.
+DO NOT edit admin.js or track.js to fix this database error.
+
+After SQL succeeds, test in this order:
+Customer booking → save TOW ID → Track Booking → Provider Dashboard →
+Accept → On the Way → Share Live Location → customer tracking refreshes.
+
+Provider login is the email/password account created in:
+Supabase → Authentication → Users.
