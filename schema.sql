@@ -95,7 +95,6 @@ create table if not exists public.app_admins (
   created_at timestamptz not null default now()
 );
 
--- Current project admin/provider bootstrap IDs are inserted only when those auth users exist.
 do $$
 begin
   if exists (select 1 from auth.users where id='d9af623c-0eb5-42cd-b87a-c96bd86793fc'::uuid) then
@@ -110,14 +109,12 @@ alter table public.bookings enable row level security;
 alter table public.providers enable row level security;
 alter table public.provider_locations enable row level security;
 
--- Remove broad/legacy policies before applying the secure set.
 drop policy if exists "public can create bookings" on public.bookings;
 drop policy if exists "public can read bookings" on public.bookings;
 drop policy if exists "providers can read bookings" on public.bookings;
 drop policy if exists "providers can update bookings" on public.bookings;
 drop policy if exists "admin or provider can read bookings" on public.bookings;
 drop policy if exists "admin or provider can update bookings" on public.bookings;
-
 drop policy if exists "Admin can manage providers" on public.providers;
 drop policy if exists "Anyone can view available providers" on public.providers;
 drop policy if exists "Provider can view own profile" on public.providers;
@@ -186,18 +183,11 @@ on public.provider_locations for update to authenticated
 using (exists (select 1 from public.providers p where p.id=provider_locations.provider_id and p.user_id=(select auth.uid())))
 with check (exists (select 1 from public.providers p where p.id=provider_locations.provider_id and p.user_id=(select auth.uid())));
 
-revoke all on public.bookings from anon;
-revoke all on public.providers from anon;
-revoke all on public.provider_locations from anon;
-revoke all on public.bookings from authenticated;
-revoke all on public.providers from authenticated;
-revoke all on public.provider_locations from authenticated;
 grant insert on public.bookings to anon, authenticated;
 grant select, update on public.bookings to authenticated;
 grant select, insert, update, delete on public.providers to authenticated;
 grant select, insert, update on public.provider_locations to authenticated;
 
-drop function if exists public.get_booking_tracking(text);
 create or replace function public.get_booking_tracking(p_booking_id text)
 returns table (
   booking_code text,
@@ -212,14 +202,58 @@ language sql
 security definer
 set search_path=public,pg_temp
 as $$
-  select b.booking_code,b.service,b.booking_date,b.booking_time,b.status,b.provider_lat,b.provider_lng
+  select b.booking_code,b.service,b.booking_date,b.booking_time,b.status,
+         coalesce(pl.latitude,b.provider_lat) as provider_lat,
+         coalesce(pl.longitude,b.provider_lng) as provider_lng
   from public.bookings b
+  left join lateral (
+    select latitude,longitude
+    from public.provider_locations
+    where provider_id=b.provider_id
+    order by updated_at desc
+    limit 1
+  ) pl on true
   where upper(btrim(p_booking_id))=upper(b.booking_code)
      or b.id::text=btrim(p_booking_id)
   limit 1;
 $$;
 revoke all on function public.get_booking_tracking(text) from public;
 grant execute on function public.get_booking_tracking(text) to anon,authenticated;
+
+create or replace function public.share_provider_location(p_booking_id uuid, p_lat double precision, p_lng double precision)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,pg_temp
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_provider_id uuid;
+  v_is_admin boolean := false;
+begin
+  if v_uid is null then raise exception 'Authentication required'; end if;
+  if p_lat is null or p_lng is null or p_lat < -90 or p_lat > 90 or p_lng < -180 or p_lng > 180 then raise exception 'Invalid GPS coordinates'; end if;
+  select provider_id into v_provider_id from public.bookings where id=p_booking_id for update;
+  if not found then raise exception 'Booking not found'; end if;
+  select exists(select 1 from public.app_admins where user_id=v_uid) into v_is_admin;
+  if v_is_admin then
+    if v_provider_id is null then
+      select id into v_provider_id from public.providers where is_available=true order by created_at limit 1;
+    end if;
+  else
+    select id into v_provider_id from public.providers where user_id=v_uid limit 1;
+    if v_provider_id is null then raise exception 'Provider account is not configured'; end if;
+    if exists(select 1 from public.bookings where id=p_booking_id and provider_id is not null and provider_id<>v_provider_id) then raise exception 'This booking is assigned to another provider'; end if;
+  end if;
+  if v_provider_id is null then raise exception 'No available provider is configured'; end if;
+  update public.bookings set provider_id=v_provider_id,provider_lat=p_lat,provider_lng=p_lng,updated_at=now() where id=p_booking_id;
+  insert into public.provider_locations(provider_id,latitude,longitude,updated_at) values(v_provider_id,p_lat,p_lng,now());
+  return jsonb_build_object('ok',true,'provider_id',v_provider_id,'latitude',p_lat,'longitude',p_lng);
+end;
+$$;
+revoke all on function public.share_provider_location(uuid,double precision,double precision) from public;
+revoke all on function public.share_provider_location(uuid,double precision,double precision) from anon;
+grant execute on function public.share_provider_location(uuid,double precision,double precision) to authenticated;
 
 create or replace function public.set_updated_at()
 returns trigger language plpgsql set search_path=public as $$
@@ -228,3 +262,4 @@ drop trigger if exists bookings_updated_at on public.bookings;
 create trigger bookings_updated_at before update on public.bookings for each row execute function public.set_updated_at();
 
 alter table public.bookings replica identity full;
+create index if not exists provider_locations_provider_updated_idx on public.provider_locations(provider_id, updated_at desc);
