@@ -1,8 +1,17 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>TherapyOnWay | Provider Dashboard</title><link rel="stylesheet" href="style.css"></head><body class="dashboard">
+<script>
+(function(){
+  var secureHost = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  var publicUrl = "https://vr647048-max.github.io/my-first-project-RelaxGo/admin.html";
+  if (location.protocol === "file:" || (location.protocol === "http:" && !secureHost)) {
+    location.replace(publicUrl + location.search + location.hash);
+  }
+})();
+</script>
 <header class="topbar"><a class="brand" href="index.html">Therapy<span>OnWay</span></a><div class="dash-title">Provider Dashboard</div><a href="index.html">Customer Site</a></header>
 <main class="dash-wrap"><section id="loginPanel" class="login-panel"><div class="pill">SECURE PROVIDER ACCESS</div><h1>Provider Login</h1><p>Use the provider account created in Supabase Authentication.</p>
 <form id="loginForm"><input id="email" type="email" placeholder="Email" required><input id="password" type="password" placeholder="Password" required><button class="btn primary full">Login</button></form><div id="loginMsg"></div></section>
 <section id="dashboardPanel" class="hidden"><div class="dash-head"><div><div class="pill">LIVE OPERATIONS</div><h1>Bookings</h1><p>Accept bookings, navigate and share live location.</p></div><button class="btn secondary" onclick="logout()">Logout</button></div>
 <div id="stats" class="stats"></div><div id="bookingList" class="booking-list"></div></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>if(!window.supabase){document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>')}</script><script src="config.js"></script><script src="admin.js"></script></body></html>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>if(!window.supabase){document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>')}</script><script src="config.js"></script><script src="admin.js"></script><script src="location-fix.js"></script></body></html>
