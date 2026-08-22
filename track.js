@@ -1,6 +1,6 @@
 const C=window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
 const sb=(typeof window.supabase!=="undefined" && typeof C.SUPABASE_URL==="string" && C.SUPABASE_URL.startsWith("http") && typeof C.SUPABASE_ANON_KEY==="string" && (C.SUPABASE_ANON_KEY.startsWith("ey") || C.SUPABASE_ANON_KEY.startsWith("sb_")))?window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
-let map,providerMarker,pollTimer,currentId;
+let map,providerMarker,pollTimer,currentId,lastProviderLat,lastProviderLng;
 
 function setTrackMessage(text,kind="normal"){
   const el=document.getElementById("trackText");
@@ -41,19 +41,22 @@ async function load(id){
       setTrackMessage("Tracking is temporarily unavailable. Please check the Supabase connection and try again.","error");
       showStatus("Tracking unavailable","error");
     }
+    pollTimer=setTimeout(()=>load(currentId),3000);
     return;
   }
   if(!Array.isArray(data) || !data.length){
     setTrackMessage("Booking not found. Check the TOW booking ID and try again.","error");
     document.getElementById("statusCard").classList.add("hidden");
     if(map){map.remove();map=null;providerMarker=null;}
+    pollTimer=setTimeout(()=>load(currentId),3000);
     return;
   }
   const b=data[0];
   const displayId=b.booking_code||id;
   document.getElementById("bookingId").value=displayId;
   render(b,displayId);
-  pollTimer=setTimeout(()=>load(currentId),5000);
+  // Refresh frequently enough to make walking/driving movement visible.
+  pollTimer=setTimeout(()=>load(currentId),2000);
 }
 
 function render(b,displayId){
@@ -68,25 +71,36 @@ function render(b,displayId){
 
   if(waiting){
     if(map){map.remove();map=null;providerMarker=null;}
+    lastProviderLat=undefined;
+    lastProviderLng=undefined;
     return;
   }
   if(typeof L === "undefined"){
     setTrackMessage("Provider location is available, but the map service could not load. Refresh the page to try again.","error");
     return;
   }
-  if(b.provider_lat!=null && b.provider_lng!=null){
-    if(!map){
-      map=L.map("map").setView([b.provider_lat,b.provider_lng],15);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors"}).addTo(map);
-    }
-    if(!providerMarker){
-      providerMarker=L.marker([b.provider_lat,b.provider_lng]).addTo(map).bindPopup("Provider");
-    }else{
-      providerMarker.setLatLng([b.provider_lat,b.provider_lng]);
-    }
-    map.setView([b.provider_lat,b.provider_lng],15);
-    setTimeout(()=>map.invalidateSize(),50);
+  const lat=Number(b.provider_lat);
+  const lng=Number(b.provider_lng);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+  if(!map){
+    map=L.map("map").setView([lat,lng],15);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors"}).addTo(map);
   }
+  if(!providerMarker){
+    providerMarker=L.marker([lat,lng]).addTo(map).bindPopup("Provider");
+  }else{
+    const oldLat=lastProviderLat??providerMarker.getLatLng().lat;
+    const oldLng=lastProviderLng??providerMarker.getLatLng().lng;
+    providerMarker.setLatLng([lat,lng]);
+    // Only recenter when the provider actually moved, so the map does not
+    // constantly fight the customer's manual pan/zoom.
+    if(Math.abs(lat-oldLat)>0.000001 || Math.abs(lng-oldLng)>0.000001){
+      map.panTo([lat,lng],{animate:true,duration:0.4});
+    }
+  }
+  lastProviderLat=lat;
+  lastProviderLng=lng;
+  setTimeout(()=>map.invalidateSize(),50);
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
