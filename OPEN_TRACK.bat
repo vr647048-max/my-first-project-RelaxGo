@@ -1,4 +1,3 @@
 @echo off
 cd /d "%~dp0"
-rem Customer tracking page uses the secure HTTPS site.
-start "" "https://vr647048-max.github.io/my-first-project-RelaxGo/track.html"
+start "" "http://127.0.0.1:8000/track.html"

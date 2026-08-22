@@ -1,28 +1,37 @@
 const C=window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
-const PUBLIC_ADMIN_URL="https://vr647048-max.github.io/my-first-project-RelaxGo/admin.html";
-
-// Browser geolocation requires a secure context. If this page is opened directly
-// as a local file, send the provider to the official HTTPS dashboard automatically.
-if(location.protocol==="file:" || (!window.isSecureContext && !["localhost","127.0.0.1","[::1]"].includes(location.hostname))){
-  location.replace(PUBLIC_ADMIN_URL);
-}
-
 const sb=(typeof window.supabase!=="undefined" && typeof C.SUPABASE_URL==="string" && C.SUPABASE_URL.startsWith("http") && typeof C.SUPABASE_ANON_KEY==="string" && (C.SUPABASE_ANON_KEY.startsWith("ey") || C.SUPABASE_ANON_KEY.startsWith("sb_")))?window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
-let bookings=[],watchers={},realtimeChannel=null,locationState={};
+let bookings=[],watchers={},gpsTimers={},realtimeChannel=null,locationState={},currentUser=null,currentProvider=null,isAdmin=false;
 const nextStatus={New:"Accepted",Accepted:"On the Way","On the Way":"Arrived",Arrived:"Completed"};
 
 async function init(){
   if(!sb){showLogin("Supabase is not configured. Check config.js.");return}
   const {data:{session}}=await sb.auth.getSession();
-  if(session) showDash(); else showLogin();
-  sb.auth.onAuthStateChange((_e,s)=>s?showDash():showLogin());
+  if(session) await showDash(session); else showLogin();
+  sb.auth.onAuthStateChange(async (_e,s)=>s?await showDash(s):showLogin());
+}
+async function resolveRole(session){
+  currentUser=session?.user||null;
+  currentProvider=null;
+  isAdmin=!!currentUser && currentUser.id===String(C.ADMIN_USER_ID||"");
+  if(isAdmin) return true;
+  if(!currentUser) return false;
+  const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("user_id",currentUser.id).maybeSingle();
+  if(error){console.error("provider role lookup failed",error);return false;}
+  currentProvider=data||null;
+  return !!currentProvider;
 }
 function showLogin(msg=""){
   document.getElementById("loginPanel").classList.remove("hidden");
   document.getElementById("dashboardPanel").classList.add("hidden");
   document.getElementById("loginMsg").textContent=msg;
 }
-async function showDash(){
+async function showDash(session){
+  const allowed=await resolveRole(session);
+  if(!allowed){
+    await sb.auth.signOut();
+    showLogin("This account is not authorized for the Provider Dashboard.");
+    return;
+  }
   document.getElementById("loginPanel").classList.add("hidden");
   document.getElementById("dashboardPanel").classList.remove("hidden");
   await load();
@@ -54,8 +63,10 @@ function render(){
   bookings.forEach(b=>{const s=normalizedStatus(b.status);counts[s]=(counts[s]||0)+1});
   stats.innerHTML=`<div class="stat"><b>${bookings.length}</b><span>Total</span></div><div class="stat"><b>${counts.New||0}</b><span>New</span></div><div class="stat"><b>${counts["On the Way"]||0}</b><span>On the way</span></div><div class="stat"><b>${counts.Completed||0}</b><span>Completed</span></div>`;
   bookingList.innerHTML=bookings.length?bookings.map(card).join(""):'<div class="empty"><h2>No bookings yet</h2><p>Customer bookings will appear here in real time.</p></div>';
+  // If the dashboard is refreshed while one job is already on the way,
+  // resume live GPS automatically instead of making the provider find the button again.
   const active = bookings.filter(b=>["On the Way","Arrived"].includes(normalizedStatus(b.status)));
-  if(active.length===1 && !watchers[active[0].id] && !locationState[active[0].id]){
+  if(active.length===1 && !watchers[active[0].id] && !gpsTimers[active[0].id]){
     shareLocation(active[0].id,true);
   }
 }
@@ -70,7 +81,11 @@ function card(b){
   <div class="booking-actions">${b.customer_lat != null && b.customer_lng != null ? `<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customer_lat+","+b.customer_lng)}">📍 Navigate</a>` : ""}${phone?`<a class="wa" target="_blank" rel="noopener" href="${wa}">WhatsApp</a>`:""}${b.customer_phone?`<a class="secondary" href="tel:${esc(b.customer_phone)}">☎ Call</a>`:""}${next?`<button class="accept" onclick="setStatus('${escAttr(b.id)}','${escAttr(next)}')">${next==="On the Way"?"🚗 On the Way":next==="Completed"?"✓ Complete":next}</button>`:""}${["Accepted","On the Way","Arrived"].includes(current)?`<button class="map" onclick="shareLocation('${escAttr(b.id)}')">📡 ${watchers[b.id]?"Sharing Live Location":"Share Live Location"}</button>`:""}${locationState[b.id]?`<div class="location-state">${esc(locationState[b.id])}</div>`:""}</div></article>`;
 }
 async function setStatus(id,status){
-  const {error}=await sb.from("bookings").update({status}).eq("id",id);
+  const target=bookings.find(b=>String(b.id)===String(id));
+  if(!target){alert("Booking not found. Refresh the dashboard.");return;}
+  const patch={status};
+  if(!isAdmin && currentProvider && !target.provider_id){ patch.provider_id=currentProvider.id; }
+  const {error}=await sb.from("bookings").update(patch).eq("id",id);
   if(error){alert("Could not update booking: "+error.message);return;}
   if(status === "On the Way") shareLocation(id,true);
   if(status === "Completed") stopLocation(id);
@@ -80,6 +95,10 @@ function stopLocation(id,clearState=true){
   if(watchers[id]){
     navigator.geolocation.clearWatch(watchers[id]);
     delete watchers[id];
+  }
+  if(gpsTimers[id]){
+    clearInterval(gpsTimers[id]);
+    delete gpsTimers[id];
   }
   if(clearState) delete locationState[id];
 }
@@ -98,6 +117,9 @@ async function saveProviderLocation(id,p){
     render();
     return false;
   }
+  // Verify the write using the authenticated provider session. This makes a
+  // silent RLS/schema problem visible instead of leaving the customer page
+  // stuck on “waiting for provider location”.
   const {data:row,error:readError}=await sb.from("bookings").select("provider_lat,provider_lng").eq("id",id).maybeSingle();
   if(readError || !row || row.provider_lat==null || row.provider_lng==null){
     locationState[id]="GPS was captured, but the saved location could not be verified.";
@@ -110,62 +132,58 @@ async function saveProviderLocation(id,p){
   return true;
 }
 
-async function showGpsPermissionState(id){
-  if(!navigator.permissions?.query)return;
-  try{
-    const p=await navigator.permissions.query({name:"geolocation"});
-    if(p.state==="denied"){
-      locationState[id]="Location permission is blocked for this site. Open Chrome site settings and allow Location, then try again.";
-      render();
-    }
-  }catch(_e){}
-}
-
 function shareLocation(id,silent=false){
-  if(!window.isSecureContext && !["localhost","127.0.0.1","[::1]"].includes(location.hostname)){
-    locationState[id]="Secure HTTPS is required for live GPS. Opening the official TherapyOnWay provider dashboard…";
-    render();
-    if(!silent) location.assign(PUBLIC_ADMIN_URL);
-    return false;
-  }
   if(!navigator.geolocation){
     locationState[id]="GPS is not supported by this browser.";
     render();
     if(!silent) alert(locationState[id]);
     return false;
   }
-  if(watchers[id]){
+  if(watchers[id] || gpsTimers[id]){
     locationState[id]="Live location is sharing.";
     render();
     return true;
   }
   locationState[id]="Requesting GPS permission…";
   render();
-  showGpsPermissionState(id);
 
-  let firstFix=true;
+  let firstFixHandled=false;
   const success=async p=>{
     const saved=await saveProviderLocation(id,p);
-    if(saved && firstFix && !silent){
-      alert("Live location is sharing. Keep this dashboard open while travelling.");
-      firstFix=false;
+    if(saved && !firstFixHandled){
+      firstFixHandled=true;
+      if(!silent) alert("Live location is sharing. Keep this dashboard open while travelling.");
     }
   };
   const failure=e=>{
-    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this HTTPS site." : e && e.code===2 ? "GPS location unavailable. Turn on Windows Location Services and keep Wi‑Fi on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
+    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this site." : e && e.code===2 ? "GPS location unavailable. Turn on phone/Windows Location Services and keep Wi‑Fi/mobile data on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
     locationState[id]=msg;
     stopLocation(id,false);
     render();
     if(!silent) alert(msg);
   };
 
+  // Use both watchPosition and periodic fresh fixes. Some mobile browsers can
+  // delay watch callbacks; the periodic request keeps the provider position
+  // moving in Supabase while the dashboard remains open.
   navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
-  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  gpsTimers[id]=setInterval(()=>{
+    if(document.hidden) return;
+    navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  },4000);
   return true;
 }
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden) return;
+  Object.keys(watchers).forEach(id=>{
+    navigator.geolocation.getCurrentPosition(p=>saveProviderLocation(id,p),()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  });
+});
 async function logout(){
   Object.keys(watchers).forEach(stopLocation);
   watchers={};
+  gpsTimers={};
   locationState={};
   await sb.auth.signOut();
 }

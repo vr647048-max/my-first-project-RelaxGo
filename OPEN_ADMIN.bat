@@ -1,4 +1,3 @@
 @echo off
 cd /d "%~dp0"
-rem Live GPS requires the secure HTTPS provider dashboard.
-start "" "https://vr647048-max.github.io/my-first-project-RelaxGo/admin.html"
+start "" "http://127.0.0.1:8000/admin.html"

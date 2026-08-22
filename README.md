@@ -49,6 +49,7 @@ Edit the service cards and booking options in `index.html` if you want different
 
 ### Security note
 The browser only uses a Supabase publishable/anon key. Never place a service-role/secret key in `config.js`.
+Provider dashboard access is role-checked: the configured admin user is treated as admin; other authenticated users must exist in `providers`. A provider claims an unassigned booking when accepting it, so later status/GPS updates stay tied to that provider. Customer tracking uses a narrow RPC and does not expose customer name, phone or exact customer GPS.
 
 Customer tracking does **not** query the whole bookings table. It calls `get_booking_tracking()` and receives only booking status, service/date/time and provider coordinates.
 
