@@ -1,4 +1,12 @@
 const C=window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
+const PUBLIC_ADMIN_URL="https://vr647048-max.github.io/my-first-project-RelaxGo/admin.html";
+
+// Browser geolocation requires a secure context. If this page is opened directly
+// as a local file, send the provider to the official HTTPS dashboard automatically.
+if(location.protocol==="file:" || (!window.isSecureContext && !["localhost","127.0.0.1","[::1]"].includes(location.hostname))){
+  location.replace(PUBLIC_ADMIN_URL);
+}
+
 const sb=(typeof window.supabase!=="undefined" && typeof C.SUPABASE_URL==="string" && C.SUPABASE_URL.startsWith("http") && typeof C.SUPABASE_ANON_KEY==="string" && (C.SUPABASE_ANON_KEY.startsWith("ey") || C.SUPABASE_ANON_KEY.startsWith("sb_")))?window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
 let bookings=[],watchers={},realtimeChannel=null,locationState={};
 const nextStatus={New:"Accepted",Accepted:"On the Way","On the Way":"Arrived",Arrived:"Completed"};
@@ -46,8 +54,6 @@ function render(){
   bookings.forEach(b=>{const s=normalizedStatus(b.status);counts[s]=(counts[s]||0)+1});
   stats.innerHTML=`<div class="stat"><b>${bookings.length}</b><span>Total</span></div><div class="stat"><b>${counts.New||0}</b><span>New</span></div><div class="stat"><b>${counts["On the Way"]||0}</b><span>On the way</span></div><div class="stat"><b>${counts.Completed||0}</b><span>Completed</span></div>`;
   bookingList.innerHTML=bookings.length?bookings.map(card).join(""):'<div class="empty"><h2>No bookings yet</h2><p>Customer bookings will appear here in real time.</p></div>';
-  // If the dashboard is refreshed while one job is already on the way,
-  // resume live GPS automatically instead of making the provider find the button again.
   const active = bookings.filter(b=>["On the Way","Arrived"].includes(normalizedStatus(b.status)));
   if(active.length===1 && !watchers[active[0].id] && !locationState[active[0].id]){
     shareLocation(active[0].id,true);
@@ -92,9 +98,6 @@ async function saveProviderLocation(id,p){
     render();
     return false;
   }
-  // Verify the write using the authenticated provider session. This makes a
-  // silent RLS/schema problem visible instead of leaving the customer page
-  // stuck on “waiting for provider location”.
   const {data:row,error:readError}=await sb.from("bookings").select("provider_lat,provider_lng").eq("id",id).maybeSingle();
   if(readError || !row || row.provider_lat==null || row.provider_lng==null){
     locationState[id]="GPS was captured, but the saved location could not be verified.";
@@ -107,7 +110,24 @@ async function saveProviderLocation(id,p){
   return true;
 }
 
+async function showGpsPermissionState(id){
+  if(!navigator.permissions?.query)return;
+  try{
+    const p=await navigator.permissions.query({name:"geolocation"});
+    if(p.state==="denied"){
+      locationState[id]="Location permission is blocked for this site. Open Chrome site settings and allow Location, then try again.";
+      render();
+    }
+  }catch(_e){}
+}
+
 function shareLocation(id,silent=false){
+  if(!window.isSecureContext && !["localhost","127.0.0.1","[::1]"].includes(location.hostname)){
+    locationState[id]="Secure HTTPS is required for live GPS. Opening the official TherapyOnWay provider dashboard…";
+    render();
+    if(!silent) location.assign(PUBLIC_ADMIN_URL);
+    return false;
+  }
   if(!navigator.geolocation){
     locationState[id]="GPS is not supported by this browser.";
     render();
@@ -121,6 +141,7 @@ function shareLocation(id,silent=false){
   }
   locationState[id]="Requesting GPS permission…";
   render();
+  showGpsPermissionState(id);
 
   let firstFix=true;
   const success=async p=>{
@@ -131,15 +152,13 @@ function shareLocation(id,silent=false){
     }
   };
   const failure=e=>{
-    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this site." : e && e.code===2 ? "GPS location unavailable. Turn on Windows Location Services." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
+    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this HTTPS site." : e && e.code===2 ? "GPS location unavailable. Turn on Windows Location Services and keep Wi‑Fi on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
     locationState[id]=msg;
     stopLocation(id,false);
     render();
     if(!silent) alert(msg);
   };
 
-  // Desktop Chrome can delay watchPosition's first callback. Get one immediate
-  // fix first, then keep the live watcher running for movement updates.
   navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
   watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
   return true;
