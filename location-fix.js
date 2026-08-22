@@ -1,6 +1,8 @@
 // TherapyOnWay live-location hardening.
-// Loaded after admin.js so the Share Live Location button always uses this
-// HTTPS-safe implementation and the existing RLS rules.
+// This file is loaded after admin.js and is the final GPS handler.
+// It publishes each GPS fix through the secure Supabase RPC so booking +
+// provider location are updated together and the customer map can always
+// read the latest position.
 (function(){
   const C = window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
   const client = (typeof window.supabase !== "undefined" && C.SUPABASE_URL && C.SUPABASE_ANON_KEY)
@@ -81,29 +83,17 @@
 
     const previous = lastSaved[id];
     if(previous && Math.abs(previous.lat-lat) < 0.000001 && Math.abs(previous.lng-lng) < 0.000001){
-      setUi(id, "Live location is sharing.", true);
+      setUi(id, `Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}`, true);
       return;
     }
 
-    // Update the booking directly. For providers, including provider_id in the
-    // same UPDATE makes an unassigned booking immediately belong to that provider
-    // and satisfies the production RLS WITH CHECK rule.
-    const patch = {provider_lat:lat, provider_lng:lng};
-    if(!isAdminUser && providerProfile) patch.provider_id = providerProfile.id;
-
-    const {error} = await client.from("bookings").update(patch).eq("id",id);
+    const {data,error} = await client.rpc("share_provider_location",{
+      p_booking_id:id,
+      p_lat:lat,
+      p_lng:lng
+    });
     if(error) throw error;
-
-    // Keep the provider history table in sync when the caller is a provider.
-    if(!isAdminUser && providerProfile){
-      const {error:historyError} = await client.from("provider_locations").insert({
-        provider_id:providerProfile.id,
-        latitude:lat,
-        longitude:lng,
-        updated_at:new Date().toISOString()
-      });
-      if(historyError) console.warn("Provider location history was not saved", historyError);
-    }
+    if(!data?.ok) throw new Error("The server did not accept this GPS update.");
 
     lastSaved[id] = {lat,lng};
     setUi(id, `Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}`, true);
@@ -166,9 +156,8 @@
 
       const failure = e => {
         console.error("TherapyOnWay geolocation error", e);
-        stop(id);
         setUi(id, errorText(e), false);
-        if(!silent) alert(errorText(e));
+        if(e?.code === 1) stop(id);
       };
 
       navigator.geolocation.getCurrentPosition(success, failure, {
@@ -190,7 +179,7 @@
           maximumAge:0,
           timeout:15000
         });
-      },5000);
+      },2000);
       return true;
     };
 
