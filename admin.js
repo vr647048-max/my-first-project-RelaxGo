@@ -13,7 +13,14 @@ async function resolveRole(session){
   currentUser=session?.user||null;
   currentProvider=null;
   isAdmin=!!currentUser && currentUser.id===String(C.ADMIN_USER_ID||"");
-  if(isAdmin) return true;
+  if(isAdmin){
+    // Admin accounts can also run the provider dashboard for testing. Use the
+    // first available provider profile so live GPS has a real provider_id.
+    const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("is_available",true).order("created_at",{ascending:true}).limit(1).maybeSingle();
+    if(error){console.error("available provider lookup failed",error);return true;}
+    currentProvider=data||null;
+    return true;
+  }
   if(!currentUser) return false;
   const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("user_id",currentUser.id).maybeSingle();
   if(error){console.error("provider role lookup failed",error);return false}
@@ -82,7 +89,7 @@ async function setStatus(id,status){
   const target=bookings.find(b=>String(b.id)===String(id));
   if(!target){alert("Booking not found. Refresh the dashboard.");return;}
   const patch={status};
-  if(!isAdmin && currentProvider && !target.provider_id){ patch.provider_id=currentProvider.id; }
+  if(currentProvider && !target.provider_id){ patch.provider_id=currentProvider.id; }
   const {error}=await sb.from("bookings").update(patch).eq("id",id);
   if(error){alert("Could not update booking: "+error.message);return;}
   if(status === "On the Way") shareLocation(id,true);
@@ -109,11 +116,8 @@ async function saveProviderLocation(id,p){
     render();
     return false;
   }
-  // Persist the latest fix in the dedicated provider_locations table. The
-  // customer tracking RPC reads this table first, so movement is no longer
-  // dependent on the booking row being refreshed or cached.
   if(!currentProvider?.id){
-    locationState[id]="Provider account is not linked to a provider profile.";
+    locationState[id]="No provider profile is linked to this dashboard.";
     render();
     return false;
   }
@@ -129,8 +133,7 @@ async function saveProviderLocation(id,p){
     render();
     return false;
   }
-  // Keep the booking row synchronized too for compatibility with older pages.
-  const {error:bookingError}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng}).eq("id",id);
+  const {error:bookingError}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng,provider_id:currentProvider.id}).eq("id",id);
   if(bookingError){
     console.warn("booking location compatibility update failed",bookingError);
   }
@@ -166,9 +169,6 @@ function shareLocation(id,silent=false){
     const code=e?.code;
     const msg=code===1 ? "GPS permission denied. Allow Location for this site." : code===2 ? "GPS temporarily unavailable. Keep Location/Wi‑Fi/mobile data on; live tracking will keep trying." : "GPS timed out. Keep Location/Wi‑Fi on; live tracking will keep trying.";
     locationState[id]=msg;
-    // Do NOT stop the watcher on transient code 2/3 errors. Mobile GPS can
-    // temporarily lose a fix while walking, and stopping here used to kill
-    // live movement after the first successful location.
     if(code===1) stopLocation(id,false);
     render();
     if(!silent && code===1) alert(msg);
