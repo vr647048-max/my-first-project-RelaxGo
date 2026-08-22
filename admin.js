@@ -14,8 +14,6 @@ async function resolveRole(session){
   currentProvider=null;
   isAdmin=!!currentUser && currentUser.id===String(C.ADMIN_USER_ID||"");
   if(isAdmin){
-    // Admin accounts can also run the provider dashboard for testing. Use the
-    // first available provider profile so live GPS has a real provider_id.
     const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("is_available",true).order("created_at",{ascending:true}).limit(1).maybeSingle();
     if(error){console.error("available provider lookup failed",error);return true;}
     currentProvider=data||null;
@@ -121,21 +119,26 @@ async function saveProviderLocation(id,p){
     render();
     return false;
   }
-  const {error:locationError}=await sb.from("provider_locations").upsert({
-    provider_id:currentProvider.id,
-    latitude:lat,
-    longitude:lng,
-    updated_at:new Date().toISOString()
-  },{onConflict:"provider_id"});
-  if(locationError){
-    console.error("provider location table update failed",locationError);
-    locationState[id]="GPS captured, but the live location could not be saved: "+String(locationError.message||locationError);
+
+  // IMPORTANT: use the secure database RPC instead of upsert(provider_id).
+  // provider_locations intentionally stores a location history and therefore
+  // does not have a unique provider_id constraint. The previous upsert call
+  // could fail on every GPS update, which made the customer map appear stuck.
+  const {data,error}=await sb.rpc("share_provider_location",{
+    p_booking_id:id,
+    p_lat:lat,
+    p_lng:lng
+  });
+  if(error){
+    console.error("share_provider_location failed",error);
+    locationState[id]="GPS captured, but the live location could not be saved: "+String(error.message||error);
     render();
     return false;
   }
-  const {error:bookingError}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng,provider_id:currentProvider.id}).eq("id",id);
-  if(bookingError){
-    console.warn("booking location compatibility update failed",bookingError);
+  if(!data?.ok){
+    locationState[id]="Live location was not accepted by the database. Please keep this dashboard open.";
+    render();
+    return false;
   }
   locationState[id]=`Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(accuracy)?` • ±${Math.round(accuracy)}m`:""}`;
   render();
@@ -179,7 +182,7 @@ function shareLocation(id,silent=false){
   gpsTimers[id]=setInterval(()=>{
     if(document.hidden) return;
     navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
-  },3000);
+  },2000);
   return true;
 }
 document.addEventListener("visibilitychange",()=>{
