@@ -16,7 +16,7 @@ async function resolveRole(session){
   if(isAdmin) return true;
   if(!currentUser) return false;
   const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("user_id",currentUser.id).maybeSingle();
-  if(error){console.error("provider role lookup failed",error);return false;}
+  if(error){console.error("provider role lookup failed",error);return false}
   currentProvider=data||null;
   return !!currentProvider;
 }
@@ -63,8 +63,6 @@ function render(){
   bookings.forEach(b=>{const s=normalizedStatus(b.status);counts[s]=(counts[s]||0)+1});
   stats.innerHTML=`<div class="stat"><b>${bookings.length}</b><span>Total</span></div><div class="stat"><b>${counts.New||0}</b><span>New</span></div><div class="stat"><b>${counts["On the Way"]||0}</b><span>On the way</span></div><div class="stat"><b>${counts.Completed||0}</b><span>Completed</span></div>`;
   bookingList.innerHTML=bookings.length?bookings.map(card).join(""):'<div class="empty"><h2>No bookings yet</h2><p>Customer bookings will appear here in real time.</p></div>';
-  // If the dashboard is refreshed while one job is already on the way,
-  // resume live GPS automatically instead of making the provider find the button again.
   const active = bookings.filter(b=>["On the Way","Arrived"].includes(normalizedStatus(b.status)));
   if(active.length===1 && !watchers[active[0].id] && !gpsTimers[active[0].id]){
     shareLocation(active[0].id,true);
@@ -105,29 +103,38 @@ function stopLocation(id,clearState=true){
 async function saveProviderLocation(id,p){
   const lat=Number(p?.coords?.latitude);
   const lng=Number(p?.coords?.longitude);
+  const accuracy=Number(p?.coords?.accuracy);
   if(!Number.isFinite(lat)||!Number.isFinite(lng)){
     locationState[id]="GPS returned an invalid location.";
     render();
     return false;
   }
-  const {error}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng}).eq("id",id);
-  if(error){
-    console.error("provider location update failed",error);
-    locationState[id]="GPS captured, but Supabase could not save it: "+String(error.message||error);
+  // Persist the latest fix in the dedicated provider_locations table. The
+  // customer tracking RPC reads this table first, so movement is no longer
+  // dependent on the booking row being refreshed or cached.
+  if(!currentProvider?.id){
+    locationState[id]="Provider account is not linked to a provider profile.";
     render();
     return false;
   }
-  // Verify the write using the authenticated provider session. This makes a
-  // silent RLS/schema problem visible instead of leaving the customer page
-  // stuck on “waiting for provider location”.
-  const {data:row,error:readError}=await sb.from("bookings").select("provider_lat,provider_lng").eq("id",id).maybeSingle();
-  if(readError || !row || row.provider_lat==null || row.provider_lng==null){
-    locationState[id]="GPS was captured, but the saved location could not be verified.";
-    console.error("provider location verification failed",readError,row);
+  const {error:locationError}=await sb.from("provider_locations").upsert({
+    provider_id:currentProvider.id,
+    latitude:lat,
+    longitude:lng,
+    updated_at:new Date().toISOString()
+  },{onConflict:"provider_id"});
+  if(locationError){
+    console.error("provider location table update failed",locationError);
+    locationState[id]="GPS captured, but the live location could not be saved: "+String(locationError.message||locationError);
     render();
     return false;
   }
-  locationState[id]="Live location is sharing.";
+  // Keep the booking row synchronized too for compatibility with older pages.
+  const {error:bookingError}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng}).eq("id",id);
+  if(bookingError){
+    console.warn("booking location compatibility update failed",bookingError);
+  }
+  locationState[id]=`Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(accuracy)?` • ±${Math.round(accuracy)}m`:""}`;
   render();
   return true;
 }
@@ -152,32 +159,33 @@ function shareLocation(id,silent=false){
     const saved=await saveProviderLocation(id,p);
     if(saved && !firstFixHandled){
       firstFixHandled=true;
-      if(!silent) alert("Live location is sharing. Keep this dashboard open while travelling.");
+      if(!silent) alert("Live location is sharing. Keep this Provider Dashboard open while travelling.");
     }
   };
   const failure=e=>{
-    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this site." : e && e.code===2 ? "GPS location unavailable. Turn on phone/Windows Location Services and keep Wi‑Fi/mobile data on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
+    const code=e?.code;
+    const msg=code===1 ? "GPS permission denied. Allow Location for this site." : code===2 ? "GPS temporarily unavailable. Keep Location/Wi‑Fi/mobile data on; live tracking will keep trying." : "GPS timed out. Keep Location/Wi‑Fi on; live tracking will keep trying.";
     locationState[id]=msg;
-    stopLocation(id,false);
+    // Do NOT stop the watcher on transient code 2/3 errors. Mobile GPS can
+    // temporarily lose a fix while walking, and stopping here used to kill
+    // live movement after the first successful location.
+    if(code===1) stopLocation(id,false);
     render();
-    if(!silent) alert(msg);
+    if(!silent && code===1) alert(msg);
   };
 
-  // Use both watchPosition and periodic fresh fixes. Some mobile browsers can
-  // delay watch callbacks; the periodic request keeps the provider position
-  // moving in Supabase while the dashboard remains open.
   navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
-  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
   gpsTimers[id]=setInterval(()=>{
     if(document.hidden) return;
-    navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
-  },4000);
+    navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  },3000);
   return true;
 }
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden) return;
   Object.keys(watchers).forEach(id=>{
-    navigator.geolocation.getCurrentPosition(p=>saveProviderLocation(id,p),()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+    navigator.geolocation.getCurrentPosition(p=>saveProviderLocation(id,p),()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:20000});
   });
 });
 async function logout(){
