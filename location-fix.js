@@ -1,6 +1,6 @@
 // TherapyOnWay live-location hardening.
 // Loaded after admin.js so the Share Live Location button always uses this
-// HTTPS-safe, RLS-safe location publisher.
+// HTTPS-safe implementation and the existing RLS rules.
 (function(){
   const C = window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
   const client = (typeof window.supabase !== "undefined" && C.SUPABASE_URL && C.SUPABASE_ANON_KEY)
@@ -11,6 +11,8 @@
   const timers = Object.create(null);
   const busy = Object.create(null);
   const lastSaved = Object.create(null);
+  let providerProfile = null;
+  let isAdminUser = false;
 
   function pageIsSecure(){
     return window.isSecureContext || location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -24,9 +26,7 @@
 
   function setUi(id, text, ok){
     const button = findButton(id);
-    if(button){
-      button.textContent = ok ? "📡 Sharing Live Location" : "📡 Share Live Location";
-    }
+    if(button) button.textContent = ok ? "📡 Sharing Live Location" : "📡 Share Live Location";
     const card = button ? button.closest(".booking") : null;
     if(!card) return;
     let state = card.querySelector(".location-state");
@@ -52,10 +52,25 @@
   }
 
   function errorText(e){
-    if(e && e.code === 1) return "GPS permission denied. Open the site over HTTPS and allow Location.";
+    if(e && e.code === 1) return "GPS permission denied. Open the HTTPS site and allow Location.";
     if(e && e.code === 2) return "GPS is unavailable. Turn on phone Location Services and keep Wi‑Fi/mobile data on.";
     if(e && e.code === 3) return "GPS timed out. Keep Location Services on and try again.";
     return "Could not read GPS location. Please try again.";
+  }
+
+  async function loadIdentity(){
+    if(!client) throw new Error("Supabase connection is not available.");
+    const {data:{user},error:userError} = await client.auth.getUser();
+    if(userError || !user) throw new Error("Provider login session is missing. Please log in again.");
+    isAdminUser = String(user.id) === String(C.ADMIN_USER_ID || "");
+    providerProfile = null;
+    if(!isAdminUser){
+      const {data,error} = await client.from("providers").select("id,user_id,name,is_available").eq("user_id",user.id).maybeSingle();
+      if(error) throw error;
+      providerProfile = data || null;
+      if(!providerProfile) throw new Error("This account is not configured as a provider.");
+    }
+    return user;
   }
 
   async function publish(id, position){
@@ -64,20 +79,31 @@
     const lng = Number(position?.coords?.longitude);
     if(!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("GPS returned an invalid location.");
 
-    // Avoid writing identical coordinates repeatedly when the device has not moved.
     const previous = lastSaved[id];
     if(previous && Math.abs(previous.lat-lat) < 0.000001 && Math.abs(previous.lng-lng) < 0.000001){
       setUi(id, "Live location is sharing.", true);
       return;
     }
 
-    const { data, error } = await client.rpc("share_provider_location", {
-      p_booking_id: id,
-      p_lat: lat,
-      p_lng: lng
-    });
+    // Update the booking directly. For providers, including provider_id in the
+    // same UPDATE makes an unassigned booking immediately belong to that provider
+    // and satisfies the production RLS WITH CHECK rule.
+    const patch = {provider_lat:lat, provider_lng:lng};
+    if(!isAdminUser && providerProfile) patch.provider_id = providerProfile.id;
+
+    const {error} = await client.from("bookings").update(patch).eq("id",id);
     if(error) throw error;
-    if(!data || data.ok !== true) throw new Error("Supabase did not confirm the location update.");
+
+    // Keep the provider history table in sync when the caller is a provider.
+    if(!isAdminUser && providerProfile){
+      const {error:historyError} = await client.from("provider_locations").insert({
+        provider_id:providerProfile.id,
+        latitude:lat,
+        longitude:lng,
+        updated_at:new Date().toISOString()
+      });
+      if(historyError) console.warn("Provider location history was not saved", historyError);
+    }
 
     lastSaved[id] = {lat,lng};
     setUi(id, `Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}`, true);
@@ -86,7 +112,7 @@
   function start(id, silent){
     if(!pageIsSecure()){
       setUi(id, "GPS needs the secure HTTPS TherapyOnWay website. Open the Provider Dashboard from OPEN_ADMIN.bat.", false);
-      if(!silent) alert("GPS needs HTTPS. I have fixed the dashboard so the normal Provider Dashboard opens on the secure GitHub Pages address.");
+      if(!silent) alert("GPS needs HTTPS. The dashboard now redirects automatically to the secure TherapyOnWay site.");
       return false;
     }
     if(!navigator.geolocation){
@@ -105,57 +131,73 @@
 
     setUi(id, "Requesting GPS permission…", false);
 
-    const success = async position => {
-      if(busy[id]) return;
-      busy[id] = true;
+    const begin = async () => {
       try{
-        await publish(id, position);
+        await loadIdentity();
       }catch(err){
-        console.error("TherapyOnWay live location update failed", err);
-        const message = String(err?.message || err || "Location update failed");
-        setUi(id, "GPS captured, but the server could not save it: " + message, false);
-        if(!silent && !start._alerted){
-          start._alerted = true;
-          alert("Live location could not be saved. Please refresh the Provider Dashboard and try again.");
-        }
-      }finally{
-        busy[id] = false;
+        console.error("TherapyOnWay provider identity error", err);
+        setUi(id, String(err?.message || err), false);
+        if(!silent) alert(String(err?.message || err));
+        return false;
       }
-    };
 
-    const failure = e => {
-      console.error("TherapyOnWay geolocation error", e);
-      stop(id);
-      setUi(id, errorText(e), false);
-      if(!silent) alert(errorText(e));
-    };
+      let firstFix = true;
+      const success = async position => {
+        if(busy[id]) return;
+        busy[id] = true;
+        try{
+          await publish(id, position);
+          if(firstFix && !silent){
+            firstFix = false;
+            alert("Live location is sharing. Keep this Provider Dashboard open while travelling.");
+          }
+        }catch(err){
+          console.error("TherapyOnWay live location update failed", err);
+          const message = String(err?.message || err || "Location update failed");
+          setUi(id, "GPS captured, but the server could not save it: " + message, false);
+          if(!silent && firstFix){
+            firstFix = false;
+            alert("Live location could not be saved. Please refresh the Provider Dashboard and try again.");
+          }
+        }finally{
+          busy[id] = false;
+        }
+      };
 
-    navigator.geolocation.getCurrentPosition(success, failure, {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 30000
-    });
+      const failure = e => {
+        console.error("TherapyOnWay geolocation error", e);
+        stop(id);
+        setUi(id, errorText(e), false);
+        if(!silent) alert(errorText(e));
+      };
 
-    watches[id] = navigator.geolocation.watchPosition(success, failure, {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 15000
-    });
-
-    timers[id] = setInterval(() => {
-      if(document.hidden) return;
-      navigator.geolocation.getCurrentPosition(success, () => {}, {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 15000
+      navigator.geolocation.getCurrentPosition(success, failure, {
+        enableHighAccuracy:true,
+        maximumAge:0,
+        timeout:30000
       });
-    }, 5000);
 
+      watches[id] = navigator.geolocation.watchPosition(success, failure, {
+        enableHighAccuracy:true,
+        maximumAge:0,
+        timeout:15000
+      });
+
+      timers[id] = setInterval(() => {
+        if(document.hidden) return;
+        navigator.geolocation.getCurrentPosition(success, () => {}, {
+          enableHighAccuracy:true,
+          maximumAge:0,
+          timeout:15000
+        });
+      },5000);
+      return true;
+    };
+
+    begin();
     return true;
   }
 
-  // Override the old dashboard implementation without requiring the user to
-  // replace the whole project folder again.
   window.shareLocation = start;
   window.stopLocation = stop;
 
