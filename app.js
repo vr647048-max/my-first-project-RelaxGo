@@ -103,96 +103,111 @@ function code(){
   return "TOW-" + Math.floor(100000 + Math.random()*900000);
 }
 
+async function loadRazorpay(){
+  if (window.Razorpay) return true;
+  await new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    sc.src = "https://checkout.razorpay.com/v1/checkout.js";
+    sc.onload = resolve;
+    sc.onerror = reject;
+    document.head.appendChild(sc);
+  });
+  return !!window.Razorpay;
+}
+
+async function paymentApi(payload){
+  const endpoint = String(C.PAYMENT_FUNCTION_URL || (String(C.SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/razorpay-payment"));
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": C.SUPABASE_ANON_KEY, "Authorization": "Bearer " + C.SUPABASE_ANON_KEY },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || "Payment service unavailable.");
+  return data;
+}
 
 const bookingForm = document.getElementById("bookingForm");
 if (bookingForm) {
   bookingForm.addEventListener("submit", async e => {
     e.preventDefault();
     if (bookingSubmitting) return;
-    if (!coords) {
-      alert("Please click “Use my location” and wait until GPS says Location captured.");
-      return;
-    }
-    if (!sb) {
-      alert("Supabase SDK/config is not loaded. Please refresh once. If it still fails, make sure internet is on so the Supabase SDK can load.");
-      return;
-    }
+    if (!coords) { alert("Please click “Use my location” and wait until GPS says Location captured."); return; }
+    if (!sb) { alert("Supabase SDK/config is not loaded. Please refresh once."); return; }
 
     bookingSubmitting = true;
     const submitButton = bookingForm.querySelector('button[type="submit"]');
-    if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Saving booking…"; }
-    const serviceValue = document.getElementById("service").value;
-    if (!serviceValue) { alert("Please select a service."); bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Confirm Booking";} return; }
-    const [service, price] = serviceValue.split("|");
-    const phone = document.getElementById("phone").value.trim();
-    if (!/^[0-9]{10}$/.test(phone)) { alert("Please enter a valid 10-digit mobile number."); bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Confirm Booking";} return; }
-    const dateValue = document.getElementById("date").value;
-    const timeValue = document.getElementById("time").value;
-    const appointment = new Date(`${dateValue}T${timeValue}`);
-    if (!dateValue || !timeValue || Number.isNaN(appointment.getTime()) || appointment.getTime() < Date.now() + 5 * 60 * 1000) {
-      alert("Please choose a future date and time (at least 5 minutes from now).");
-      bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Confirm Booking";}
-      return;
+    const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Pay & Confirm Booking";} };
+    if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Preparing secure payment…"; }
+
+    try {
+      const serviceValue = document.getElementById("service").value;
+      if (!serviceValue) throw new Error("Please select a service.");
+      const [service, priceText] = serviceValue.split("|");
+      const price = Number(priceText);
+      const phone = document.getElementById("phone").value.trim();
+      if (!/^[0-9]{10}$/.test(phone)) throw new Error("Please enter a valid 10-digit mobile number.");
+      const dateValue = document.getElementById("date").value;
+      const timeValue = document.getElementById("time").value;
+      const appointment = new Date(`${dateValue}T${timeValue}`);
+      if (!dateValue || !timeValue || Number.isNaN(appointment.getTime()) || appointment.getTime() < Date.now() + 5 * 60 * 1000) throw new Error("Please choose a future date and time (at least 5 minutes from now).");
+
+      const booking = {
+        customer_name: document.getElementById("name").value.trim(),
+        customer_phone: phone,
+        service, price,
+        booking_date: dateValue,
+        booking_time: timeValue,
+        customer_lat: coords.lat,
+        customer_lng: coords.lng,
+        customer_accuracy: coords.accuracy
+      };
+
+      const order = await paymentApi({ action: "create_order", service, price });
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded. Please check your internet connection.");
+      if (submitButton) submitButton.textContent = "Waiting for payment…";
+
+      const result = await new Promise((resolve, reject) => {
+        const rz = new Razorpay({
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency || "INR",
+          name: C.BRAND_NAME || "TherapyOnWay",
+          description: service,
+          order_id: order.order_id,
+          prefill: { name: booking.customer_name, contact: "+91" + booking.customer_phone },
+          notes: { booking_service: service },
+          theme: { color: "#19a974" },
+          handler: response => resolve(response),
+          modal: { ondismiss: () => reject(new Error("Payment window was closed. Your booking was not created.")) }
+        });
+        rz.on("payment.failed", response => reject(new Error(response?.error?.description || "Payment failed. No booking was created.")));
+        rz.open();
+      });
+
+      if (submitButton) submitButton.textContent = "Verifying payment…";
+      const verified = await paymentApi({
+        action: "verify_payment",
+        razorpay_order_id: result.razorpay_order_id,
+        razorpay_payment_id: result.razorpay_payment_id,
+        razorpay_signature: result.razorpay_signature,
+        booking
+      });
+
+      const saved = verified.booking;
+      const trackingId = saved.booking_code;
+      bookingForm.classList.add("hidden");
+      const s = document.getElementById("bookingSuccess");
+      s.classList.remove("hidden");
+      const maskingWhatsApp = String(C.MASKING_WHATSAPP_URL || ("https://wa.me/" + String(C.BUSINESS_WHATSAPP || "").replace(/\D/g,""))).trim();
+      const wa = maskingWhatsApp ? maskingWhatsApp + (maskingWhatsApp.includes("?") ? "&" : "?") + "text=" + encodeURIComponent(`New TherapyOnWay Paid Booking\n\nID: ${trackingId}\nName: ${saved.customer_name}\nService: ${saved.service}\nAmount: ₹${saved.price}\nDate: ${saved.booking_date}\nTime: ${saved.booking_time}\nLocation: https://www.google.com/maps?q=${saved.customer_lat},${saved.customer_lng}\nPayment ID: ${result.razorpay_payment_id}`) : "#";
+      const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+      s.innerHTML = `<h3>✅ Payment successful & booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code><p>Paid securely: ₹${safe(saved.price)}. Save this ID to track your booking.</p><a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a><a class="btn secondary full" style="margin-top:8px" target="_blank" rel="noopener" href="${wa}">Send booking details on WhatsApp</a>`;
+    } catch (err) {
+      alert(err?.message || "Payment could not be completed.");
+      reset();
     }
-    const bookingCode = code();
-    const b = {
-      booking_code: bookingCode,
-      customer_name: document.getElementById("name").value.trim(),
-      customer_phone: phone,
-      service,
-      price: Number(price),
-      booking_date: document.getElementById("date").value,
-      booking_time: document.getElementById("time").value,
-      customer_lat: coords.lat,
-      customer_lng: coords.lng,
-      customer_accuracy: coords.accuracy
-    };
-
-    // The database schema is intentionally kept in one place (schema.sql).
-    // Insert the complete booking record, including GPS accuracy, so the
-    // customer, provider dashboard and tracking page all use the same shape.
-    let inserted = null;
-    let error = null;
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      b.booking_code = attempt === 0 ? bookingCode : code();
-      ({error} = await sb.from("bookings").insert(b));
-
-      // A rare duplicate code should never make a real booking fail.
-      const msg = String(error?.message || "").toLowerCase();
-      const duplicate = msg.includes("duplicate") && msg.includes("booking");
-      if (!duplicate) break;
-    }
-
-    if (error) {
-      const msg = String(error.message || "");
-      if (msg.toLowerCase().includes("schema cache") || msg.toLowerCase().includes("column")) {
-        alert("Booking could not be saved because Supabase is still using an old table schema. Run the included schema.sql once in Supabase SQL Editor, then refresh this page.");
-      } else {
-        alert("Booking could not be saved: " + msg);
-      }
-      bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Confirm Booking";}
-      return;
-    }
-
-    const trackingId = b.booking_code;
-    if (!trackingId) { alert("Booking was saved but no tracking ID was returned. Please contact support."); bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Confirm Booking";} return; }
-
-    bookingForm.classList.add("hidden");
-    const s = document.getElementById("bookingSuccess");
-    s.classList.remove("hidden");
-
-    const providerPhone = String(C.PROVIDER_PHONE || "").replace(/\D/g,"");
-    const wa = `https://wa.me/${providerPhone}?text=${encodeURIComponent(
-      `New TherapyOnWay Booking\n\nID: ${trackingId}\nName: ${b.customer_name}\nService: ${b.service}\nDate: ${b.booking_date}\nTime: ${b.booking_time}\nLocation: https://www.google.com/maps?q=${b.customer_lat},${b.customer_lng}`
-    )}`;
-
-    const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-    s.innerHTML =
-      `<h3>✅ Booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code>` +
-      `<p>Save this ID to track your booking.</p>` +
-      `<a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a>` +
-      `<a class="btn secondary full" style="margin-top:8px" target="_blank" rel="noopener" href="${wa}">Send provider WhatsApp alert</a>`;
   });
 }
 
@@ -206,16 +221,26 @@ const callTop = document.getElementById("callTop");
 const callHero = document.getElementById("callHero");
 const footerPhone = document.getElementById("footerPhone");
 const footerWhatsApp = document.getElementById("footerWhatsApp");
-const providerDigits = String(C.PROVIDER_PHONE || "").replace(/\D/g,"").slice(-10);
-const providerIntl = providerDigits ? "+91" + providerDigits : "";
-if (callTop) callTop.href = providerDigits ? "tel:" + providerIntl : "#";
-if (callHero) callHero.href = providerDigits ? "tel:" + providerIntl : "#";
-if (footerPhone) {
-  footerPhone.href = providerDigits ? "tel:" + providerIntl : "#";
-  footerPhone.textContent = providerDigits ? "☎ +91 " + providerDigits.slice(0,5) + " " + providerDigits.slice(5) : "☎ Contact provider";
+
+const businessPhone = String(C.BUSINESS_PHONE || "").replace(/\D/g,"");
+const businessDisplay = String(C.BUSINESS_PHONE_DISPLAY || "+91 724 846 3222");
+const businessWhatsApp = String(C.BUSINESS_WHATSAPP || businessPhone).replace(/\D/g,"");
+
+function setContactLink(el, href, text){
+  if (!el) return;
+  el.href = href;
+  el.textContent = text;
+  el.removeAttribute("aria-disabled");
+  el.classList.remove("disabled");
 }
-if (footerWhatsApp) {
-  footerWhatsApp.href = providerDigits ? "https://wa.me/" + providerDigits : "#";
+if (businessPhone.length >= 10) {
+  setContactLink(callTop, "tel:+" + businessPhone, "☎ Call / WhatsApp");
+  setContactLink(callHero, "tel:+" + businessPhone, "☎ Call for Booking");
+  setContactLink(footerPhone, "tel:+" + businessPhone, "☎ " + businessDisplay);
+}
+if (businessWhatsApp.length >= 10) {
+  const waHref = "https://wa.me/" + businessWhatsApp + "?text=" + encodeURIComponent("Hello TherapyOnWay, I want to book a massage.");
+  setContactLink(footerWhatsApp, waHref, "WhatsApp Support");
   footerWhatsApp.target = "_blank";
   footerWhatsApp.rel = "noopener";
 }
