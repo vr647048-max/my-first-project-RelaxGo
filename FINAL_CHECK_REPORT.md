@@ -1,31 +1,36 @@
-# TherapyOnWay — Final Static + Database Check
+# TherapyOnWay — Production Final Check
 
-Package: TherapyOnWay_FINAL_PRODUCTION.zip
-Files inspected: 22
+**Brand:** TherapyOnWay  
+**Tagline:** Professional Massage On Demand  
+**Date:** 23 August 2026
 
-## Static checks completed
-- All HTML local file references resolve.
-- All JavaScript files pass `node --check`.
-- TherapyOnWay branding is used by the current UI/config.
-- No demo `9999999999` phone number remains.
-- Supabase browser config contains a publishable/anon key, not a service-role key.
-- Customer booking, Provider/Admin dashboard and Track page are present.
-- Call, WhatsApp and Google Maps navigation links are wired.
-- Booking status workflow is implemented: New → Accepted → On the Way → Arrived → Completed.
-- Local start/launch BAT files are present.
-- Logo SVG is present locally.
+## Production checks completed
+- Customer booking page is present and connected to the live Supabase project.
+- GPS location is required for a booking and is captured with accuracy.
+- Booking workflow is stored in Supabase.
+- Provider/Admin dashboard is present with login, booking list, status workflow and navigation.
+- Provider live GPS uses `watchPosition()` plus periodic fresh fixes while the dashboard is visible.
+- Customer Track page polls the secure tracking RPC and displays provider location on a map when GPS is being shared.
+- Supabase Realtime is configured for booking changes used by the dashboard.
+- Current booking status constraint is: `New`, `Accepted`, `On the Way`, `Arrived`, `Completed`.
+- Services are populated: Hand ₹399, Head ₹499, Shoulder ₹549, Back ₹699, Neck ₹349, Full Body ₹999.
+- Business phone/WhatsApp configuration is present in `config.js`.
+- No service-role/secret Supabase key is included in the browser configuration.
+- RLS is enabled on exposed application tables.
+- Public customer booking INSERT was tested successfully under the `anon` role using a transaction that was rolled back.
+- Public service catalogue SELECT was tested successfully under the `anon` role.
+- Public booking tracking RPC was tested successfully under the `anon` role.
+- Provider live-location RPC was tested successfully under the provider's authenticated role using a transaction that was rolled back.
+- Supabase security advisor was rerun after the database changes; the mutable-search-path warning for the booking-default trigger was fixed. The remaining warning is the project-level leaked-password-protection setting.
 
-## Live database check completed
-The connected Supabase project has the `bookings_status_check` constraint allowing:
-New, Accepted, On the Way, Arrived, Completed.
+## Launch
+The GitHub repository is the production source. GitHub Pages is used for the HTTPS website and the database is hosted by Supabase.
 
-The `get_booking_tracking` RPC is installed.
+## Important real-device check
+The remaining checks that cannot be proven from server/database inspection are the user's actual phone/browser permission prompts, WhatsApp app opening, phone dialing and physical walking movement. The application code is prepared for these flows, but the final physical test must be performed on the actual customer/provider phone.
 
-## V3 GPS patch
-Provider GPS movement code has now been strengthened for mobile browsers. The provider dashboard uses `watchPosition()` plus a fresh GPS request every 4 seconds while visible, and requests a fresh fix when the dashboard becomes visible again. This addresses the common case where a mobile browser delays watch callbacks. A real walking test is still required to confirm the phone/OS reports movement as expected.
-
-## Important limitation
-Static inspection and database checks cannot prove every browser/device behavior. Final confirmation of WhatsApp opening, phone dialing, GPS permission, and live movement must be performed on the user's actual devices.
+## Payment
+The booking system is production-ready for booking and service collection. The current payment mode is **Pay after service**. A live online payment gateway should only be added after the business merchant/UPI/payment-account details are available; no payment credentials are invented in this package.
 
 ## Launch rule
-Use this package as one complete folder. Do not mix files from older RelaxGo/TherapyOnWay folders.
+Use the current GitHub version as one complete package. Do not mix files from older RelaxGo/TherapyOnWay folders.
