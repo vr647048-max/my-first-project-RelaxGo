@@ -32,6 +32,6 @@
 <div class="two"><label>Your Name<input id="name" required placeholder="Your name"></label><label>Mobile Number<input id="phone" required inputmode="tel" maxlength="10" pattern="[0-9]{10}" placeholder="10-digit mobile"></label></div>
 <div class="two"><label>Date<input id="date" type="date" required></label><label>Time<input id="time" type="time" required></label></div>
 <label>Location<div class="location-row"><input id="locationText" placeholder="Tap Use my location" readonly><button type="button" class="gps" onclick="getLocation()">📍 Use my location</button></div></label><div id="locationStatus" class="location-status">GPS location is required.</div>
-<button class="btn primary full" type="submit">Confirm Booking</button></form><div id="bookingSuccess" class="success hidden"></div></div></div>
+<button class="btn primary full" type="submit">Pay &amp; Confirm Booking</button><div class="payment-note">🔒 Secure online payment via Razorpay. Your booking is created only after successful payment.</div></form><div id="bookingSuccess" class="success hidden"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>if(!window.supabase){document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>')}</script><script src="config.js"></script><script src="app.js"></script>
 </body></html>
