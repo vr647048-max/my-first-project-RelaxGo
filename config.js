@@ -10,6 +10,7 @@ window.THERAPY_CONFIG = {
   PROVIDER_PHONE: "+917248463222",
   BRAND_NAME: "TherapyOnWay",
   TAGLINE: "Professional Massage On Demand",
+  PAYMENT_FUNCTION_URL: "https://xetthdpmvupfzvwdptlt.supabase.co/functions/v1/razorpay-payment",
   ADMIN_USER_ID: "d9af623c-0eb5-42cd-b87a-c96bd86793fc"
 };
 window.RELAXGO_CONFIG = window.THERAPY_CONFIG;
