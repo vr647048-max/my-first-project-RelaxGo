@@ -40,8 +40,7 @@ public class MainActivity extends Activity {
         });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                if (hasLocationPermission()) {
                     callback.invoke(origin, true, false);
                 } else {
                     pendingGeoOrigin = origin;
@@ -54,27 +53,30 @@ public class MainActivity extends Activity {
         webView.loadUrl(URL);
     }
 
+    private boolean hasLocationPermission() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+               checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
     private boolean openExternalIfNeeded(Uri uri) {
         if (uri == null) return false;
-        String scheme = uri.getScheme();
-        if ("tel".equalsIgnoreCase(scheme) || "mailto".equalsIgnoreCase(scheme) ||
-            "whatsapp".equalsIgnoreCase(scheme) || "geo".equalsIgnoreCase(scheme) ||
-            "sms".equalsIgnoreCase(scheme)) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, uri));
-            } catch (Exception ignored) {
-                try { startActivity(new Intent(Intent.ACTION_DIAL, uri)); } catch (Exception ignored2) {}
-            }
-            return true;
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
+        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
+        boolean external = scheme.equals("tel") || scheme.equals("mailto") || scheme.equals("whatsapp") || scheme.equals("geo") || scheme.equals("sms") ||
+                host.equals("wa.me") || host.equals("api.whatsapp.com") || host.equals("maps.google.com") || host.equals("www.google.com");
+        if (!external) return false;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (Exception ignored) {
+            try { startActivity(new Intent(Intent.ACTION_DIAL, uri)); } catch (Exception ignored2) {}
         }
-        return false;
+        return true;
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == LOCATION_REQUEST && pendingGeoCallback != null) {
-            boolean granted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                              checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean granted = hasLocationPermission();
             pendingGeoCallback.invoke(pendingGeoOrigin, granted, false);
             pendingGeoCallback = null;
             pendingGeoOrigin = null;
