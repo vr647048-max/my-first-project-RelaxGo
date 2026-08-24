@@ -1,9 +1,16 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>TherapyOnWay | Professional Massage On Demand</title>
 <meta name="description" content="Professional massage at your home, hotel or office. Easy booking, GPS location and live provider tracking.">
+<meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TherapyOnWay">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/logo.svg">
 <link rel="icon" href="assets/logo.svg"><link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -34,4 +41,9 @@
 <label>Location<div class="location-row"><input id="locationText" placeholder="Tap Use my location" readonly><button type="button" class="gps" onclick="getLocation()">📍 Use my location</button></div></label><div id="locationStatus" class="location-status">GPS location is required.</div>
 <button class="btn primary full" type="submit">Pay &amp; Confirm Booking</button><div class="payment-note">🔒 Secure online payment via Razorpay. Your booking is created only after successful payment.</div></form><div id="bookingSuccess" class="success hidden"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>if(!window.supabase){document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>')}</script><script src="config.js"></script><script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+}
+</script>
 </body></html>
