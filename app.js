@@ -178,6 +178,18 @@ if (bookingForm) {
           order_id: order.order_id,
           prefill: { name: booking.customer_name, contact: "+91" + booking.customer_phone },
           notes: { booking_service: service },
+          config: {
+            display: {
+              blocks: {
+                tow_upi: {
+                  name: "Pay via UPI",
+                  instruments: [{ method: "upi" }]
+                }
+              },
+              sequence: ["block.tow_upi", "card", "netbanking"],
+              preferences: { show_default_blocks: true }
+            }
+          },
           theme: { color: "#19a974" },
           handler: response => resolve(response),
           modal: { ondismiss: () => reject(new Error("Payment window was closed. Your booking was not created.")) }
