@@ -1,0 +1,7 @@
+PRODUCTION PAYMENT STATUS
+
+Razorpay checkout is implemented server-side. To accept real money, Supabase Edge Function secrets must use RAZORPAY LIVE credentials, not TEST credentials.
+
+UPI: Razorpay Checkout can present UPI when UPI is activated for the Razorpay account and supported in the checkout. Do not hard-code a UPI ID or build a custom unverified payment flow.
+
+CASH ON SERVICE: This is an offline payment option and should be recorded as pending until cash is actually collected.
