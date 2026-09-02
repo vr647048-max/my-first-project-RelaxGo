@@ -1,2 +1,3 @@
 @echo off
-start "" "https://vr647048-max.github.io/my-first-project-RelaxGo/track.html"
+cd /d "%~dp0"
+start "" "http://127.0.0.1:8000/track.html"

@@ -103,6 +103,7 @@ function code(){
   return "TOW-" + Math.floor(100000 + Math.random()*900000);
 }
 
+
 async function loadRazorpay(){
   if (window.Razorpay) return true;
   await new Promise((resolve, reject) => {
@@ -129,16 +130,25 @@ async function paymentApi(payload){
 
 const bookingForm = document.getElementById("bookingForm");
 if (bookingForm) {
-  bookingForm.addEventListener("submit", async e => {
+  const paymentRadios = [...bookingForm.querySelectorAll('input[name="payment_method"]')];
+  const submitButton = bookingForm.querySelector('#bookingSubmit') || bookingForm.querySelector('button[type="submit"]');
+  function selectedPaymentMethod(){ return (paymentRadios.find(r=>r.checked)?.value || 'online'); }
+  function updatePaymentButton(){
+    if (!submitButton || bookingSubmitting) return;
+    submitButton.textContent = selectedPaymentMethod()==='cash' ? 'Confirm Cash Booking' : 'Pay & Confirm Booking';
+  }
+  paymentRadios.forEach(r=>r.addEventListener('change',updatePaymentButton));
+
+  bookingForm.addEventListener('submit', async e => {
     e.preventDefault();
     if (bookingSubmitting) return;
     if (!coords) { alert("Please click “Use my location” and wait until GPS says Location captured."); return; }
     if (!sb) { alert("Supabase SDK/config is not loaded. Please refresh once."); return; }
 
     bookingSubmitting = true;
-    const submitButton = bookingForm.querySelector('button[type="submit"]');
-    const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;submitButton.textContent="Pay & Confirm Booking";} };
-    if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Preparing secure payment…"; }
+    const paymentMethod = selectedPaymentMethod();
+    const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;updatePaymentButton();} };
+    if (submitButton) { submitButton.disabled = true; submitButton.textContent = paymentMethod==='cash' ? "Creating cash booking…" : "Preparing secure payment…"; }
 
     try {
       const serviceValue = document.getElementById("service").value;
@@ -163,6 +173,19 @@ if (bookingForm) {
         customer_accuracy: coords.accuracy
       };
 
+      if (paymentMethod === 'cash') {
+        const created = await paymentApi({action:'create_cash_booking', booking});
+        const saved = created.booking;
+        const trackingId = saved.booking_code;
+        bookingForm.classList.add("hidden");
+        const s = document.getElementById("bookingSuccess");
+        s.classList.remove("hidden");
+        const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+        const wa = "https://wa.me/" + String(C.BUSINESS_WHATSAPP || C.BUSINESS_PHONE || "").replace(/\D/g,"") + "?text=" + encodeURIComponent(`New TherapyOnWay Cash Booking\n\nID: ${trackingId}\nName: ${saved.customer_name}\nService: ${saved.service}\nAmount: ₹${saved.price}\nDate: ${saved.booking_date}\nTime: ${saved.booking_time}\nLocation: https://www.google.com/maps?q=${saved.customer_lat},${saved.customer_lng}`);
+        s.innerHTML = `<h3>✅ Cash booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code><p>Amount due on service: ₹${safe(saved.price)}. Please pay the provider after the session.</p><a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a><a class="btn secondary full" style="margin-top:8px" target="_blank" rel="noopener" href="${wa}">Send booking details on WhatsApp</a>`;
+        return;
+      }
+
       const order = await paymentApi({ action: "create_order", service, price });
       await loadRazorpay();
       if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded. Please check your internet connection.");
@@ -178,18 +201,6 @@ if (bookingForm) {
           order_id: order.order_id,
           prefill: { name: booking.customer_name, contact: "+91" + booking.customer_phone },
           notes: { booking_service: service },
-          config: {
-            display: {
-              blocks: {
-                tow_upi: {
-                  name: "Pay via UPI",
-                  instruments: [{ method: "upi" }]
-                }
-              },
-              sequence: ["block.tow_upi", "card", "netbanking"],
-              preferences: { show_default_blocks: true }
-            }
-          },
           theme: { color: "#19a974" },
           handler: response => resolve(response),
           modal: { ondismiss: () => reject(new Error("Payment window was closed. Your booking was not created.")) }
@@ -199,14 +210,7 @@ if (bookingForm) {
       });
 
       if (submitButton) submitButton.textContent = "Verifying payment…";
-      const verified = await paymentApi({
-        action: "verify_payment",
-        razorpay_order_id: result.razorpay_order_id,
-        razorpay_payment_id: result.razorpay_payment_id,
-        razorpay_signature: result.razorpay_signature,
-        booking
-      });
-
+      const verified = await paymentApi({action:"verify_payment",razorpay_order_id:result.razorpay_order_id,razorpay_payment_id:result.razorpay_payment_id,razorpay_signature:result.razorpay_signature,booking});
       const saved = verified.booking;
       const trackingId = saved.booking_code;
       bookingForm.classList.add("hidden");
@@ -217,12 +221,12 @@ if (bookingForm) {
       const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
       s.innerHTML = `<h3>✅ Payment successful & booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code><p>Paid securely: ₹${safe(saved.price)}. Save this ID to track your booking.</p><a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a><a class="btn secondary full" style="margin-top:8px" target="_blank" rel="noopener" href="${wa}">Send booking details on WhatsApp</a>`;
     } catch (err) {
-      alert(err?.message || "Payment could not be completed.");
+      alert(err?.message || "Booking could not be completed.");
       reset();
     }
   });
+  updatePaymentButton();
 }
-
 function goTrack(){
   const el = document.getElementById("trackId");
   const id = el ? el.value.trim().toUpperCase() : "";
@@ -234,6 +238,9 @@ const callHero = document.getElementById("callHero");
 const footerPhone = document.getElementById("footerPhone");
 const footerWhatsApp = document.getElementById("footerWhatsApp");
 
+// Direct contact mode: the current business number is restored so Call and
+// WhatsApp work immediately. A masked/virtual destination can replace these
+// values later without changing the customer booking flow.
 const businessPhone = String(C.BUSINESS_PHONE || "").replace(/\D/g,"");
 const businessDisplay = String(C.BUSINESS_PHONE_DISPLAY || "+91 724 846 3222");
 const businessWhatsApp = String(C.BUSINESS_WHATSAPP || businessPhone).replace(/\D/g,"");
@@ -251,8 +258,10 @@ if (businessPhone.length >= 10) {
   setContactLink(footerPhone, "tel:+" + businessPhone, "☎ " + businessDisplay);
 }
 if (businessWhatsApp.length >= 10) {
-  const waHref = "https://wa.me/" + businessWhatsApp + "?text=" + encodeURIComponent("Hello TherapyOnWay, I want to book a massage.");
+  const waHref = "https://wa.me/" + businessWhatsApp + "?text=" +
+    encodeURIComponent("Hello TherapyOnWay, I want to book a massage.");
   setContactLink(footerWhatsApp, waHref, "WhatsApp Support");
   footerWhatsApp.target = "_blank";
   footerWhatsApp.rel = "noopener";
 }
+

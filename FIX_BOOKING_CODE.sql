@@ -136,6 +136,10 @@ with check (
   and booking_time is not null
   and customer_lat between -90 and 90
   and customer_lng between -180 and 180
+  and coalesce(status,'New') = 'New'
+  and provider_id is null
+  and provider_lat is null
+  and provider_lng is null
 );
 
 create policy "admin or provider can read bookings"

@@ -1,0 +1,24 @@
+THERAPYONWAY — RAZORPAY PAYMENT SETUP
+
+The website payment flow is now prepared for Razorpay Checkout.
+
+IMPORTANT:
+1. Never put the Razorpay Key Secret in config.js or any browser file.
+2. In Supabase Dashboard → Edge Functions → Secrets, add:
+   RAZORPAY_KEY_ID = your Razorpay Test/Live Key ID
+   RAZORPAY_KEY_SECRET = your matching Razorpay Test/Live Key Secret
+3. Deploy the included function:
+   supabase/functions/razorpay-payment/index.ts
+   Function name: razorpay-payment
+4. Test Mode should be used first. Do not switch to Live until Razorpay approves the account.
+5. The customer flow is:
+   service → GPS → secure Razorpay order → payment → signature verification → booking created → tracking ID.
+
+The current Supabase database has payment fields:
+- payment_status
+- razorpay_order_id
+- razorpay_payment_id
+- razorpay_signature
+- paid_at
+
+The browser never receives or stores the Razorpay secret.

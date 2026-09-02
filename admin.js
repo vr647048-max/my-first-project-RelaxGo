@@ -13,15 +13,10 @@ async function resolveRole(session){
   currentUser=session?.user||null;
   currentProvider=null;
   isAdmin=!!currentUser && currentUser.id===String(C.ADMIN_USER_ID||"");
-  if(isAdmin){
-    const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("is_available",true).order("created_at",{ascending:true}).limit(1).maybeSingle();
-    if(error){console.error("available provider lookup failed",error);return true;}
-    currentProvider=data||null;
-    return true;
-  }
+  if(isAdmin) return true;
   if(!currentUser) return false;
   const {data,error}=await sb.from("providers").select("id,user_id,name,is_available").eq("user_id",currentUser.id).maybeSingle();
-  if(error){console.error("provider role lookup failed",error);return false}
+  if(error){console.error("provider role lookup failed",error);return false;}
   currentProvider=data||null;
   return !!currentProvider;
 }
@@ -68,6 +63,8 @@ function render(){
   bookings.forEach(b=>{const s=normalizedStatus(b.status);counts[s]=(counts[s]||0)+1});
   stats.innerHTML=`<div class="stat"><b>${bookings.length}</b><span>Total</span></div><div class="stat"><b>${counts.New||0}</b><span>New</span></div><div class="stat"><b>${counts["On the Way"]||0}</b><span>On the way</span></div><div class="stat"><b>${counts.Completed||0}</b><span>Completed</span></div>`;
   bookingList.innerHTML=bookings.length?bookings.map(card).join(""):'<div class="empty"><h2>No bookings yet</h2><p>Customer bookings will appear here in real time.</p></div>';
+  // If the dashboard is refreshed while one job is already on the way,
+  // resume live GPS automatically instead of making the provider find the button again.
   const active = bookings.filter(b=>["On the Way","Arrived"].includes(normalizedStatus(b.status)));
   if(active.length===1 && !watchers[active[0].id] && !gpsTimers[active[0].id]){
     shareLocation(active[0].id,true);
@@ -79,7 +76,7 @@ function card(b){
   const bookingId=String(b.booking_code||b.id);
   const phone=String(b.customer_phone||"").replace(/\D/g,"").slice(-10);
   const wa=phone?`https://wa.me/91${phone}?text=${encodeURIComponent("TherapyOnWay "+bookingId+": provider update — "+(next||current))}`:"#";
-  return `<article class="booking"><div class="booking-top"><div><div class="booking-id">${esc(bookingId)}</div><h2>${esc(b.customer_name)}</h2><div>${esc(b.service)} • ₹${Number(b.price||0).toLocaleString("en-IN")}</div></div><span class="status">${esc(current)}</span></div>
+  return `<article class="booking"><div class="booking-top"><div><div class="booking-id">${esc(bookingId)}</div><h2>${esc(b.customer_name)}</h2><div>${esc(b.service)} • ₹${Number(b.price||0).toLocaleString("en-IN")} • ${String(b.payment_method||"online")==="cash"?"💵 Cash on Service":"💳 Online"}</div></div><span class="status">${esc(current)}</span></div>
   <div class="booking-info"><div class="info"><small>Appointment</small>${esc(b.booking_date)} • ${esc(b.booking_time)}</div><div class="info"><small>Phone</small>${esc(b.customer_phone)}</div><div class="info"><small>Customer GPS</small>${b.customer_lat != null && b.customer_lng != null ? `${Number(b.customer_lat).toFixed(6)}, ${Number(b.customer_lng).toFixed(6)}` : 'Location unavailable'}</div></div>
   <div class="booking-actions">${b.customer_lat != null && b.customer_lng != null ? `<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customer_lat+","+b.customer_lng)}">📍 Navigate</a>` : ""}${phone?`<a class="wa" target="_blank" rel="noopener" href="${wa}">WhatsApp</a>`:""}${b.customer_phone?`<a class="secondary" href="tel:${esc(b.customer_phone)}">☎ Call</a>`:""}${next?`<button class="accept" onclick="setStatus('${escAttr(b.id)}','${escAttr(next)}')">${next==="On the Way"?"🚗 On the Way":next==="Completed"?"✓ Complete":next}</button>`:""}${["Accepted","On the Way","Arrived"].includes(current)?`<button class="map" onclick="shareLocation('${escAttr(b.id)}')">📡 ${watchers[b.id]?"Sharing Live Location":"Share Live Location"}</button>`:""}${locationState[b.id]?`<div class="location-state">${esc(locationState[b.id])}</div>`:""}</div></article>`;
 }
@@ -87,7 +84,7 @@ async function setStatus(id,status){
   const target=bookings.find(b=>String(b.id)===String(id));
   if(!target){alert("Booking not found. Refresh the dashboard.");return;}
   const patch={status};
-  if(currentProvider && !target.provider_id){ patch.provider_id=currentProvider.id; }
+  if(!isAdmin && currentProvider && !target.provider_id){ patch.provider_id=currentProvider.id; }
   const {error}=await sb.from("bookings").update(patch).eq("id",id);
   if(error){alert("Could not update booking: "+error.message);return;}
   if(status === "On the Way") shareLocation(id,true);
@@ -108,44 +105,41 @@ function stopLocation(id,clearState=true){
 async function saveProviderLocation(id,p){
   const lat=Number(p?.coords?.latitude);
   const lng=Number(p?.coords?.longitude);
-  const accuracy=Number(p?.coords?.accuracy);
   if(!Number.isFinite(lat)||!Number.isFinite(lng)){
     locationState[id]="GPS returned an invalid location.";
     render();
     return false;
   }
-  if(!currentProvider?.id){
-    locationState[id]="No provider profile is linked to this dashboard.";
-    render();
-    return false;
-  }
-
-  // IMPORTANT: use the secure database RPC instead of upsert(provider_id).
-  // provider_locations intentionally stores a location history and therefore
-  // does not have a unique provider_id constraint. The previous upsert call
-  // could fail on every GPS update, which made the customer map appear stuck.
-  const {data,error}=await sb.rpc("share_provider_location",{
-    p_booking_id:id,
-    p_lat:lat,
-    p_lng:lng
-  });
+  const {error}=await sb.from("bookings").update({provider_lat:lat,provider_lng:lng}).eq("id",id);
   if(error){
-    console.error("share_provider_location failed",error);
-    locationState[id]="GPS captured, but the live location could not be saved: "+String(error.message||error);
+    console.error("provider location update failed",error);
+    locationState[id]="GPS captured, but Supabase could not save it: "+String(error.message||error);
     render();
     return false;
   }
-  if(!data?.ok){
-    locationState[id]="Live location was not accepted by the database. Please keep this dashboard open.";
+  // Verify the write using the authenticated provider session. This makes a
+  // silent RLS/schema problem visible instead of leaving the customer page
+  // stuck on “waiting for provider location”.
+  const {data:row,error:readError}=await sb.from("bookings").select("provider_lat,provider_lng").eq("id",id).maybeSingle();
+  if(readError || !row || row.provider_lat==null || row.provider_lng==null){
+    locationState[id]="GPS was captured, but the saved location could not be verified.";
+    console.error("provider location verification failed",readError,row);
     render();
     return false;
   }
-  locationState[id]=`Live location is sharing • ${lat.toFixed(6)}, ${lng.toFixed(6)}${Number.isFinite(accuracy)?` • ±${Math.round(accuracy)}m`:""}`;
+  locationState[id]="Live location is sharing.";
   render();
   return true;
 }
 
 function shareLocation(id,silent=false){
+  // Browser GPS requires HTTPS or localhost. Direct File C:/... pages are not reliable.
+  if(!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"){
+    locationState[id]="GPS needs HTTPS or localhost. Use START_SERVER.bat, then OPEN_ADMIN.bat.";
+    render();
+    if(!silent) alert(locationState[id]);
+    return false;
+  }
   if(!navigator.geolocation){
     locationState[id]="GPS is not supported by this browser.";
     render();
@@ -165,30 +159,32 @@ function shareLocation(id,silent=false){
     const saved=await saveProviderLocation(id,p);
     if(saved && !firstFixHandled){
       firstFixHandled=true;
-      if(!silent) alert("Live location is sharing. Keep this Provider Dashboard open while travelling.");
+      if(!silent) alert("Live location is sharing. Keep this dashboard open while travelling.");
     }
   };
   const failure=e=>{
-    const code=e?.code;
-    const msg=code===1 ? "GPS permission denied. Allow Location for this site." : code===2 ? "GPS temporarily unavailable. Keep Location/Wi‑Fi/mobile data on; live tracking will keep trying." : "GPS timed out. Keep Location/Wi‑Fi on; live tracking will keep trying.";
+    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this site." : e && e.code===2 ? "GPS location unavailable. Turn on phone/Windows Location Services and keep Wi‑Fi/mobile data on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
     locationState[id]=msg;
-    if(code===1) stopLocation(id,false);
+    stopLocation(id,false);
     render();
-    if(!silent && code===1) alert(msg);
+    if(!silent) alert(msg);
   };
 
+  // Use both watchPosition and periodic fresh fixes. Some mobile browsers can
+  // delay watch callbacks; the periodic request keeps the provider position
+  // moving in Supabase while the dashboard remains open.
   navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
-  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  watchers[id]=navigator.geolocation.watchPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
   gpsTimers[id]=setInterval(()=>{
     if(document.hidden) return;
-    navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
-  },2000);
+    navigator.geolocation.getCurrentPosition(success,failure,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  },4000);
   return true;
 }
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden) return;
   Object.keys(watchers).forEach(id=>{
-    navigator.geolocation.getCurrentPosition(p=>saveProviderLocation(id,p),()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+    navigator.geolocation.getCurrentPosition(p=>saveProviderLocation(id,p),()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:15000});
   });
 });
 async function logout(){

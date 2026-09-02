@@ -1,23 +1,16 @@
 THERAPYONWAY — FINAL PACKAGE
 =============================
 
-This is the current production package on the main branch.
+This folder is the current complete package.
 
-ONLINE WEBSITE:
-- GitHub Pages HTTPS deployment is configured from `main`.
-- Customer booking page uses TherapyOnWay branding.
-- Online Razorpay payment flow is deployed through Supabase.
-- Paid bookings are created only after payment signature verification.
-
-LOCAL START:
-1. Double-click START_SERVER.bat only if you need the local computer test.
+START:
+1. Double-click START_SERVER.bat.
 2. Keep the black window open.
-3. Computer: open the Customer site.
-4. Provider/Admin: open admin.html.
-5. Tracking: open track.html.
+3. Computer Customer: double-click OPEN_CUSTOMER.bat.
+4. Provider/Admin: double-click OPEN_ADMIN.bat.
+5. Tracking: double-click OPEN_TRACK.bat.
 
 IMPORTANT:
-- For the live website, use the current GitHub Pages version; do not mix files from an older RelaxGo/TherapyOnWay folder.
+- Do not mix files from an older RelaxGo/ TherapyOnWay folder.
 - Do not put a Supabase service-role key into config.js.
-- The remaining Supabase security-advisor item is leaked-password protection, which requires a Pro plan or above.
-- Physical provider GPS walking movement can be re-tested/tuned later; it does not block the current booking/payment setup.
+- Provider GPS movement is intentionally left for a later fix.

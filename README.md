@@ -10,6 +10,7 @@ A responsive home/hotel/office massage booking website with GPS booking, Supabas
 - Supabase booking storage
 - Human-friendly TOW booking IDs
 - Customer tracking page
+- Booking request protection against duplicate submissions
 - Provider login/dashboard
 - Provider workflow: New → Accepted → On the Way → Arrived → Completed
 - Google Maps navigation
@@ -54,19 +55,7 @@ Provider dashboard access is role-checked: the configured admin user is treated 
 Customer tracking does **not** query the whole bookings table. It calls `get_booking_tracking()` and receives only booking status, service/date/time and provider coordinates.
 
 ## Local testing
-From this folder run:
-
-```text
-python -m http.server 8000 --bind 0.0.0.0
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8000/
-```
-
-Keep the CMD window open.
+Use START_SERVER.bat, then OPEN_CUSTOMER.bat, OPEN_ADMIN.bat and OPEN_TRACK.bat. Do not open admin.html or track.html directly with the File C:/... address. Provider GPS works on localhost; phone GPS requires the final public HTTPS site.
 
 ## Manual end-to-end test
 1. Customer site → Book a Massage.
@@ -83,8 +72,10 @@ Keep the CMD window open.
 12. While the status is Accepted/On the Way/Arrived, click **Share Live Location** and keep the dashboard open.
 13. Refresh/leave the customer tracking page open; provider location is polled automatically.
 
-## Public launch
-Host the complete folder on an HTTPS site such as GitHub Pages, Netlify, Vercel or another HTTPS host. Test customer and provider from separate devices.
+## Public launch — payment gate
+The current package now contains a Razorpay payment flow prepared for Test/Live activation. The secure Edge Function creates Razorpay orders, verifies signatures, and creates the booking only after verified payment. Do not advertise “Pay ₹999 & Book” until a merchant gateway such as Razorpay is connected with a server-side order, signature verification and webhook/capture flow. A gateway secret must never be placed in `config.js` or browser JavaScript.
+
+For live GPS and payments, the public site must use HTTPS. Test customer and provider from separate devices before accepting real customers.
 
 ## Images
 Service/hero images use web-hosted Unsplash URLs, so internet access is required for those images.

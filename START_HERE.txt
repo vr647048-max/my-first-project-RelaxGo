@@ -25,7 +25,6 @@ Use that exact email/password on admin.html.
 3) CONFIG
 ---------
 config.js contains the Supabase project URL, publishable key and provider phone.
-Provider phone is configured as +917248846322.
 Never put a service-role/secret key in config.js.
 
 4) RUN WEBSITE LOCALLY / TEST ON COMPUTER + SAME-WIFI PHONE
@@ -50,6 +49,12 @@ IMPORTANT: Mobile GPS requires a secure HTTPS website (or localhost). The local
 192.168.x.x test address is useful for checking that the phone can reach the site,
 but Chrome may block GPS on that plain HTTP address. The final public site must
 be hosted on HTTPS for customer/provider GPS to work reliably on phones.
+
+IMPORTANT FOR THE CURRENT ERROR
+--------------------------------
+The Provider and Track screenshots were opened as File C:/... pages. Do NOT open admin.html or track.html directly. Start START_SERVER.bat first, then use OPEN_ADMIN.bat and OPEN_TRACK.bat.
+
+Provider GPS works on localhost. A phone using the Wi-Fi IP needs the final public HTTPS site for reliable browser GPS.
 
 5) COMPLETE TEST ORDER
 ----------------------
@@ -80,3 +85,11 @@ That means schema.sql has not been run in the correct Supabase project yet.
 Run the COMPLETE schema.sql in Supabase SQL Editor, then refresh.
 
 DO NOT paste schema.sql into Chrome's address bar.
+
+
+CONTACT PRIVACY
+----------------
+The personal provider phone number is not stored in the customer-facing contact configuration.
+Customer Call and WhatsApp buttons are prepared for a masked/virtual business number.
+To activate them, put the masking service's Call URL in MASKING_CALL_URL and its WhatsApp/Business URL in MASKING_WHATSAPP_URL in config.js.
+Do not put the personal mobile number into customer-facing HTML or JavaScript.
