@@ -103,7 +103,6 @@ function code(){
   return "TOW-" + Math.floor(100000 + Math.random()*900000);
 }
 
-
 async function loadRazorpay(){
   if (window.Razorpay) return true;
   await new Promise((resolve, reject) => {
@@ -238,9 +237,6 @@ const callHero = document.getElementById("callHero");
 const footerPhone = document.getElementById("footerPhone");
 const footerWhatsApp = document.getElementById("footerWhatsApp");
 
-// Direct contact mode: the current business number is restored so Call and
-// WhatsApp work immediately. A masked/virtual destination can replace these
-// values later without changing the customer booking flow.
 const businessPhone = String(C.BUSINESS_PHONE || "").replace(/\D/g,"");
 const businessDisplay = String(C.BUSINESS_PHONE_DISPLAY || "+91 724 846 3222");
 const businessWhatsApp = String(C.BUSINESS_WHATSAPP || businessPhone).replace(/\D/g,"");
@@ -253,15 +249,23 @@ function setContactLink(el, href, text){
   el.classList.remove("disabled");
 }
 if (businessPhone.length >= 10) {
-  setContactLink(callTop, "tel:+" + businessPhone, "☎ Call / WhatsApp");
+  setContactLink(callTop, "tel:+" + businessPhone, "☎ Call for Booking");
   setContactLink(callHero, "tel:+" + businessPhone, "☎ Call for Booking");
   setContactLink(footerPhone, "tel:+" + businessPhone, "☎ " + businessDisplay);
 }
 if (businessWhatsApp.length >= 10) {
-  const waHref = "https://wa.me/" + businessWhatsApp + "?text=" +
-    encodeURIComponent("Hello TherapyOnWay, I want to book a massage.");
+  const waHref = "https://wa.me/" + businessWhatsApp + "?text=" + encodeURIComponent("Hello TherapyOnWay, I want to book a massage.");
   setContactLink(footerWhatsApp, waHref, "WhatsApp Support");
   footerWhatsApp.target = "_blank";
   footerWhatsApp.rel = "noopener";
 }
 
+// Make required customer-policy links discoverable from every homepage load.
+// The pages are also included in the sitemap so customers and payment reviewers can find them.
+const footer = document.querySelector("footer");
+if (footer && !document.getElementById("policyLinks")) {
+  const box = document.createElement("div");
+  box.id = "policyLinks";
+  box.innerHTML = '<h4>Policies</h4><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms & Conditions</a><a href="refund.html">Cancellation & Refund</a><a href="contact.html">Contact Us</a>';
+  footer.insertBefore(box, footer.querySelector(".copyright") || null);
+}
