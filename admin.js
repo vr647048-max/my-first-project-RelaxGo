@@ -154,7 +154,7 @@ function shareLocation(id,silent=false){
     render();
     return true;
   }
-  locationState[id]="Requesting GPS permission…";
+  locationState[id]="Requesting GPS permission… Please allow Location when the browser asks.";
   render();
 
   let firstFixHandled=false;
@@ -162,15 +162,15 @@ function shareLocation(id,silent=false){
     const saved=await saveProviderLocation(id,p);
     if(saved && !firstFixHandled){
       firstFixHandled=true;
-      if(!silent) alert("Live location is sharing. Keep this dashboard open while travelling.");
+      
     }
   };
   const failure=e=>{
-    const msg=e && e.code===1 ? "GPS permission denied. Allow Location for this site." : e && e.code===2 ? "GPS location unavailable. Turn on phone/Windows Location Services and keep Wi‑Fi/mobile data on." : "GPS timed out. Keep Location/Wi‑Fi on and try again.";
+    const msg=e && e.code===1 ? "GPS permission denied. Tap the lock/site settings and allow Location, then tap Share Live Location again." : e && e.code===2 ? "GPS location unavailable. Turn on Location Services and keep Wi‑Fi/mobile data on, then try again." : "GPS timed out. Keep Location Services on and tap Share Live Location again.";
     locationState[id]=msg;
     stopLocation(id,false);
     render();
-    if(!silent) alert(msg);
+    
   };
 
   // Use both watchPosition and periodic fresh fixes. Some mobile browsers can
