@@ -16,7 +16,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
-    private static final String URL = "https://vr647048-max.github.io/my-first-project-RelaxGo/";
+    private static final String URL = "https://vr647048-max.github.io/my-first-project-RelaxGo/admin.html";
     private static final int LOCATION_REQUEST = 100;
     private WebView webView;
     private GeolocationPermissions.Callback pendingGeoCallback;
@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setSupportMultipleWindows(false);
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
 
         // Razorpay and some bank/OTP redirects rely on cookies in WebView.
