@@ -71,13 +71,14 @@ update public.bookings
 set status = case
   when status is null or lower(btrim(status)) in ('pending','new') then 'New'
   when lower(btrim(status)) = 'accepted' then 'Accepted'
+  when lower(btrim(status)) in ('rejected','declined','cancelled','canceled') then 'Rejected'
   when lower(btrim(status)) in ('on the way','on_way','on-the-way','on the way.') then 'On the Way'
   when lower(btrim(status)) = 'arrived' then 'Arrived'
   when lower(btrim(status)) in ('completed','complete') then 'Completed'
   else 'New'
 end;
 alter table public.bookings add constraint bookings_status_check
-  check (status in ('New','Accepted','On the Way','Arrived','Completed'));
+  check (status in ('New','Accepted','Rejected','On the Way','Arrived','Completed'));
 
 update public.bookings
 set booking_code = 'TOW-' || upper(substr(replace(id::text, '-', ''), 1, 10))
