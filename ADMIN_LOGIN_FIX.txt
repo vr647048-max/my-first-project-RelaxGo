@@ -1,0 +1,1 @@
+Provider login diagnostic: Admin user is vr647048@gmail.com. The admin dashboard uses Supabase Auth and ADMIN_USER_ID from config.js. Keep password private. The dashboard requires a secure HTTPS URL.
