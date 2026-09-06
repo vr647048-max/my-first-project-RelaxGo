@@ -54,5 +54,5 @@ jobs:
           gh release view v1.4.0 >/dev/null 2>&1 || gh release create v1.4.0 --title "TherapyOnWay Provider Android App v1.4.0" --notes "Provider/Admin operations app for TherapyOnWay."
           gh release upload v1.4.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber
           gh release view v1.0.1 >/dev/null 2>&1 || gh release create v1.0.1 --title "TherapyOnWay Customer Android App v1.0.1" --notes "Customer booking app for TherapyOnWay."
-          gh release upload v1.0.1 customer/build/outputs/apk/debug/customer-debug.apk --clobber
+          gh release upload v1.0.1 android/customer/build/outputs/apk/debug/customer-debug.apk --clobber
 
