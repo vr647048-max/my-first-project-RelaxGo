@@ -12,3 +12,5 @@ android {
         versionName '1.4.0'
     }
 }
+
+// Provider chat release build trigger
