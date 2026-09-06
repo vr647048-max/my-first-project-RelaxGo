@@ -50,5 +50,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.2.0 >/dev/null 2>&1 || gh release create v1.2.0 --title "TherapyOnWay Provider Android App v1.2.0" --notes "Provider/Admin operations app for TherapyOnWay."
-          gh release upload v1.2.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber
+          gh release view v1.3.0 >/dev/null 2>&1 || gh release create v1.3.0 --title "TherapyOnWay Provider Android App v1.3.0" --notes "Provider/Admin operations app for TherapyOnWay."
+          gh release upload v1.3.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber
