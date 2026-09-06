@@ -1,4 +1,5 @@
 name: Build TherapyOnWay Android APK
+# Rebuild after provider live-location fix
 
 on:
   workflow_dispatch:
