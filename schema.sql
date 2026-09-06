@@ -252,3 +252,71 @@ alter table public.bookings add constraint bookings_payment_method_check check (
 
 create unique index if not exists bookings_razorpay_order_uidx on public.bookings(razorpay_order_id) where razorpay_order_id is not null;
 create unique index if not exists bookings_razorpay_payment_uidx on public.bookings(razorpay_payment_id) where razorpay_payment_id is not null;
+
+
+-- Customer <-> provider live chat
+create table if not exists public.booking_messages (
+  id uuid primary key default gen_random_uuid(),
+  booking_id uuid not null references public.bookings(id) on delete cascade,
+  sender_role text not null check (sender_role in ('customer','provider','admin')),
+  sender_user_id uuid references auth.users(id) on delete set null,
+  message text not null check (char_length(btrim(message)) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+create index if not exists booking_messages_booking_created_idx on public.booking_messages(booking_id,created_at);
+alter table public.booking_messages enable row level security;
+drop policy if exists "booking messages provider/admin read" on public.booking_messages;
+drop policy if exists "booking messages provider/admin insert" on public.booking_messages;
+create policy "booking messages provider/admin read" on public.booking_messages for select to authenticated using (
+  exists(select 1 from public.app_admins a where a.user_id=(select auth.uid()))
+  or exists(select 1 from public.providers p join public.bookings b on b.provider_id=p.id where b.id=booking_messages.booking_id and p.user_id=(select auth.uid()))
+);
+create policy "booking messages provider/admin insert" on public.booking_messages for insert to authenticated with check (
+  sender_role in ('provider','admin') and sender_user_id=(select auth.uid())
+  and (
+    exists(select 1 from public.app_admins a where a.user_id=(select auth.uid()))
+    or exists(select 1 from public.providers p join public.bookings b on b.provider_id=p.id where b.id=booking_messages.booking_id and p.user_id=(select auth.uid()))
+  )
+);
+revoke all on public.booking_messages from anon;
+revoke all on public.booking_messages from authenticated;
+grant select,insert on public.booking_messages to authenticated;
+
+create or replace function public.get_customer_chat(p_booking_code text,p_phone text)
+returns table(id uuid,sender_role text,message text,created_at timestamptz)
+language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_booking_id uuid;
+begin
+ select id into v_booking_id from public.bookings
+ where upper(btrim(booking_code))=upper(btrim(p_booking_code))
+ and regexp_replace(coalesce(customer_phone,''),'\\D','','g')=regexp_replace(coalesce(p_phone,''),'\\D','','g')
+ limit 1;
+ if v_booking_id is null then raise exception 'Booking ID and mobile number do not match'; end if;
+ return query select m.id,m.sender_role,m.message,m.created_at from public.booking_messages m
+ where m.booking_id=v_booking_id order by m.created_at asc;
+end; $$;
+revoke all on function public.get_customer_chat(text,text) from public;
+grant execute on function public.get_customer_chat(text,text) to anon,authenticated;
+
+create or replace function public.send_customer_chat(p_booking_code text,p_phone text,p_message text)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_booking_id uuid; v_message text:=btrim(p_message);
+begin
+ if char_length(v_message)<1 or char_length(v_message)>2000 then raise exception 'Message must be between 1 and 2000 characters'; end if;
+ select id into v_booking_id from public.bookings
+ where upper(btrim(booking_code))=upper(btrim(p_booking_code))
+ and regexp_replace(coalesce(customer_phone,''),'\\D','','g')=regexp_replace(coalesce(p_phone,''),'\\D','','g')
+ limit 1;
+ if v_booking_id is null then raise exception 'Booking ID and mobile number do not match'; end if;
+ insert into public.booking_messages(booking_id,sender_role,sender_user_id,message) values(v_booking_id,'customer',null,v_message);
+ return jsonb_build_object('ok',true);
+end; $$;
+revoke all on function public.send_customer_chat(text,text,text) from public;
+grant execute on function public.send_customer_chat(text,text,text) to anon,authenticated;
+
+do $$
+begin
+ if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='booking_messages') then
+   alter publication supabase_realtime add table public.booking_messages;
+ end if;
+end $$;
