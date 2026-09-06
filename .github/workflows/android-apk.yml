@@ -36,15 +36,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
+      - name: Build customer and provider APKs
         working-directory: android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle :app:assembleDebug :customer:assembleDebug --no-daemon --stacktrace
 
       - name: Verify APK exists
         working-directory: android
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          test -s customer/build/outputs/apk/debug/customer-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk customer/build/outputs/apk/debug/customer-debug.apk
 
       - name: Publish public APK download
         env:
@@ -52,3 +53,5 @@ jobs:
         run: |
           gh release view v1.4.0 >/dev/null 2>&1 || gh release create v1.4.0 --title "TherapyOnWay Provider Android App v1.4.0" --notes "Provider/Admin operations app for TherapyOnWay."
           gh release upload v1.4.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber
+          gh release view v1.0.0 >/dev/null 2>&1 || gh release create v1.0.0 --title "TherapyOnWay Customer Android App v1.0.0" --notes "Customer booking app for TherapyOnWay."
+          gh release upload v1.0.0 customer/build/outputs/apk/debug/customer-debug.apk --clobber
