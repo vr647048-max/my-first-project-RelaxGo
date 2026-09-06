@@ -74,7 +74,9 @@ function render(){
 function card(b){
   const current=normalizedStatus(b.status);
   const next=nextStatus[current]||"";
-  const bookingId=String(b.booking_code||b.id);\n  const pay=String(b.payment_status||"unpaid").toLowerCase();\n  const paymentLabel=pay==="paid"?"✅ Paid":pay==="failed"?"❌ Failed":pay==="refunded"?"↩ Refunded":"⏳ Unpaid";
+  const bookingId=String(b.booking_code||b.id);
+  const pay=String(b.payment_status||"unpaid").toLowerCase();
+  const paymentLabel=pay==="paid"?"✅ Paid":pay==="failed"?"❌ Failed":pay==="refunded"?"↩ Refunded":"⏳ Unpaid";
   const phone=String(b.customer_phone||"").replace(/\D/g,"").slice(-10);
   const wa=phone?`https://wa.me/91${phone}?text=${encodeURIComponent("TherapyOnWay "+bookingId+": provider update — "+(next||current))}`:"#";
   return `<article class="booking"><div class="booking-top"><div><div class="booking-id">${esc(bookingId)}</div><h2>${esc(b.customer_name)}</h2><div>${esc(b.service)} • ₹${Number(b.price||0).toLocaleString("en-IN")} • ${String(b.payment_method||"online")==="cash"?"💵 Cash on Service":"💳 Online"} • ${paymentLabel}</div></div><span class="status">${esc(current)}</span></div>
