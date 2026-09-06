@@ -217,19 +217,22 @@ returns table (
   booking_date date,
   booking_time time,
   status text,
+  customer_lat double precision,
+  customer_lng double precision,
   provider_lat double precision,
   provider_lng double precision
 )
 language sql
 security definer
 set search_path=public,pg_temp
-as $$
-  select b.booking_code,b.service,b.booking_date,b.booking_time,b.status,b.provider_lat,b.provider_lng
+as $
+  select b.booking_code,b.service,b.booking_date,b.booking_time,b.status,
+         b.customer_lat,b.customer_lng,b.provider_lat,b.provider_lng
   from public.bookings b
   where upper(btrim(p_booking_id))=upper(b.booking_code)
      or b.id::text=btrim(p_booking_id)
   limit 1;
-$$;
+$;
 revoke all on function public.get_booking_tracking(text) from public;
 grant execute on function public.get_booking_tracking(text) to anon,authenticated;
 
