@@ -53,6 +53,7 @@ function normalizedStatus(status){
   const s=String(status||"").trim().toLowerCase();
   if(!s || s==="pending" || s==="new") return "New";
   if(s==="accepted") return "Accepted";
+  if(s==="rejected" || s==="declined" || s==="cancelled" || s==="canceled") return "Rejected";
   if(s==="on the way" || s==="on_way" || s==="on-the-way") return "On the Way";
   if(s==="arrived") return "Arrived";
   if(s==="completed" || s==="complete") return "Completed";
@@ -78,7 +79,7 @@ function card(b){
   const wa=phone?`https://wa.me/91${phone}?text=${encodeURIComponent("TherapyOnWay "+bookingId+": provider update — "+(next||current))}`:"#";
   return `<article class="booking"><div class="booking-top"><div><div class="booking-id">${esc(bookingId)}</div><h2>${esc(b.customer_name)}</h2><div>${esc(b.service)} • ₹${Number(b.price||0).toLocaleString("en-IN")} • ${String(b.payment_method||"online")==="cash"?"💵 Cash on Service":"💳 Online"} • ${paymentLabel}</div></div><span class="status">${esc(current)}</span></div>
   <div class="booking-info"><div class="info"><small>Appointment</small>${esc(b.booking_date)} • ${esc(b.booking_time)}</div><div class="info"><small>Phone</small>${esc(b.customer_phone)}</div><div class="info"><small>Customer GPS</small>${b.customer_lat != null && b.customer_lng != null ? `${Number(b.customer_lat).toFixed(6)}, ${Number(b.customer_lng).toFixed(6)}` : 'Location unavailable'}</div></div>
-  <div class="booking-actions">${b.customer_lat != null && b.customer_lng != null ? `<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customer_lat+","+b.customer_lng)}">📍 Navigate</a>` : ""}${phone?`<a class="wa" target="_blank" rel="noopener" href="${wa}">WhatsApp</a>`:""}${b.customer_phone?`<a class="secondary" href="tel:${esc(b.customer_phone)}">☎ Call</a>`:""}${next?`<button class="accept" onclick="setStatus('${escAttr(b.id)}','${escAttr(next)}')">${next==="On the Way"?"🚗 On the Way":next==="Completed"?"✓ Complete":next}</button>`:""}${["Accepted","On the Way","Arrived"].includes(current)?`<button class="map" onclick="shareLocation('${escAttr(b.id)}')">📡 ${watchers[b.id]?"Sharing Live Location":"Share Live Location"}</button>`:""}${locationState[b.id]?`<div class="location-state">${esc(locationState[b.id])}</div>`:""}</div></article>`;
+  <div class="booking-actions">${b.customer_lat != null && b.customer_lng != null ? `<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customer_lat+","+b.customer_lng)}">📍 Navigate</a>` : ""}${phone?`<a class="wa" target="_blank" rel="noopener" href="${wa}">WhatsApp</a>`:""}${b.customer_phone?`<a class="secondary" href="tel:${esc(b.customer_phone)}">☎ Call</a>`:""}${next?`<button class="accept" onclick="setStatus('${escAttr(b.id)}','${escAttr(next)}')">${next==="On the Way"?"🚗 On the Way":next==="Completed"?"✓ Complete":next}</button>`:""}${["Accepted","On the Way","Arrived"].includes(current)?`<button class="map" onclick="shareLocation('${escAttr(b.id)}')">📡 ${watchers[b.id]?"Sharing Live Location":"Share Live Location"}</button>`:""}${locationState[b.id]?`<div class="location-state">${esc(locationState[b.id])}</div>`:""}</div>${current==="New"?`<button class="danger" onclick="rejectBooking('${escAttr(b.id)}')">❌ Reject</button>`:""}</article>`;
 }
 async function setStatus(id,status){
   const target=bookings.find(b=>String(b.id)===String(id));
@@ -197,4 +198,5 @@ async function logout(){
 window.addEventListener("beforeunload",()=>Object.keys(watchers).forEach(stopLocation));
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function escAttr(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
+async function rejectBooking(id){const target=bookings.find(b=>String(b.id)===String(id));if(!target)return;if(!confirm("Reject this booking?"))return;const {error}=await sb.from("bookings").update({status:"Rejected"}).eq("id",id);if(error){alert("Could not reject booking: "+error.message);return;}await load();}
 init();
