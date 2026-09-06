@@ -211,4 +211,5 @@ function closeChat(){if(chatChannel)sb.removeChannel(chatChannel);chatChannel=nu
 document.getElementById('chatForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!chatBookingId||!currentUser)return;const input=document.getElementById('chatInput');const message=input.value.trim();if(!message)return;const result=await sb.from('booking_messages').insert({booking_id:chatBookingId,sender_role:isAdmin?'admin':'provider',sender_user_id:currentUser.id,message});if(result.error){alert('Message could not be sent: '+result.error.message);return;}input.value='';await loadChat();});
 async function rejectBooking(id){const target=bookings.find(b=>String(b.id)===String(id));if(!target)return;if(!confirm("Reject this booking?"))return;const {error}=await sb.from("bookings").update({status:"Rejected"}).eq("id",id);if(error){alert("Could not reject booking: "+error.message);return;}await load();}
 document.addEventListener("click",()=>{if(!notificationReady) enableBookingAlerts();},{once:true});
+window.addEventListener("beforeunload",()=>{if(alertPollTimer) clearInterval(alertPollTimer);});
 init();
