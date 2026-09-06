@@ -1,6 +1,6 @@
 const C=window.THERAPY_CONFIG || window.RELAXGO_CONFIG || {};
 const sb=(typeof window.supabase!=="undefined" && typeof C.SUPABASE_URL==="string" && C.SUPABASE_URL.startsWith("http") && typeof C.SUPABASE_ANON_KEY==="string" && (C.SUPABASE_ANON_KEY.startsWith("ey") || C.SUPABASE_ANON_KEY.startsWith("sb_")))?window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
-let bookings=[],watchers={},gpsTimers={},realtimeChannel=null,locationState={},currentUser=null,currentProvider=null,isAdmin=false;
+let bookings=[],watchers={},gpsTimers={},realtimeChannel=null,locationState={},currentUser=null,currentProvider=null,isAdmin=false;\nlet lastBookingIds=new Set(),notificationReady=false;\nfunction notifyNewBookings(rows){ const fresh=(rows||[]).filter(b=>String(b.status||"") === "New" && !lastBookingIds.has(String(b.id))); if(!notificationReady){(rows||[]).forEach(b=>lastBookingIds.add(String(b.id))); notificationReady=true; return;} fresh.forEach(b=>{ lastBookingIds.add(String(b.id)); try{ if("Notification" in window && Notification.permission==="granted") new Notification("TherapyOnWay — New Booking",{body:(b.service||"Massage")+" • ₹"+Number(b.price||0).toLocaleString("en-IN")}); const C=window.AudioContext||window.webkitAudioContext;if(C){const c=new C(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.12;o.start();o.stop(c.currentTime+.35);} }catch(e){} });}\nasync function enableBookingAlerts(){try{if("Notification" in window && Notification.permission==="default") await Notification.requestPermission();notificationReady=true;alert("Booking alerts enabled. Keep the Provider app open for instant alerts.");}catch(e){notificationReady=true;}}
 const nextStatus={New:"Accepted",Accepted:"On the Way","On the Way":"Arrived",Arrived:"Completed"};
 
 async function init(){
@@ -47,7 +47,7 @@ document.getElementById("loginForm").addEventListener("submit",async e=>{
 async function load(){
   const {data,error}=await sb.from("bookings").select("*").order("created_at",{ascending:false});
   if(error){document.getElementById("bookingList").innerHTML='<div class="empty"><h2>Could not load bookings</h2><p>'+esc(error.message)+'</p></div>';return}
-  bookings=data||[];render();
+  bookings=data||[];notifyNewBookings(bookings);render();
 }
 function normalizedStatus(status){
   const s=String(status||"").trim().toLowerCase();
@@ -201,4 +201,4 @@ window.addEventListener("beforeunload",()=>Object.keys(watchers).forEach(stopLoc
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function escAttr(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
 async function rejectBooking(id){const target=bookings.find(b=>String(b.id)===String(id));if(!target)return;if(!confirm("Reject this booking?"))return;const {error}=await sb.from("bookings").update({status:"Rejected"}).eq("id",id);if(error){alert("Could not reject booking: "+error.message);return;}await load();}
-init();
+document.addEventListener("click",()=>{if(!notificationReady) enableBookingAlerts();},{once:true});\ninit();
