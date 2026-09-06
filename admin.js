@@ -62,7 +62,7 @@ function render(){
   const counts={New:0,"On the Way":0,Completed:0};
   bookings.forEach(b=>{const s=normalizedStatus(b.status);counts[s]=(counts[s]||0)+1});
   stats.innerHTML=`<div class="stat"><b>${bookings.length}</b><span>Total</span></div><div class="stat"><b>${counts.New||0}</b><span>New</span></div><div class="stat"><b>${counts["On the Way"]||0}</b><span>On the way</span></div><div class="stat"><b>${counts.Completed||0}</b><span>Completed</span></div>`;
-  bookingList.innerHTML=bookings.length?bookings.map(card).join(""):'<div class="empty"><h2>No bookings yet</h2><p>Customer bookings will appear here in real time.</p></div>';
+  const sf=document.getElementById("statusFilter")?.value||"all"; const pf=document.getElementById("paymentFilter")?.value||"all"; const visible=bookings.filter(b=>(sf==="all"||normalizedStatus(b.status)===sf)&&(pf==="all"||String(b.payment_status||"unpaid").toLowerCase()===pf)); bookingList.innerHTML=visible.length?visible.map(card).join(""):'<div class="empty"><h2>No matching bookings</h2><p>Try another filter.</p></div>';
   // If the dashboard is refreshed while one job is already on the way,
   // resume live GPS automatically instead of making the provider find the button again.
   const active = bookings.filter(b=>["On the Way","Arrived"].includes(normalizedStatus(b.status)));
