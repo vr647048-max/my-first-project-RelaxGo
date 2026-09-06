@@ -1,4 +1,4 @@
-const CACHE_NAME = 'therapy-on-way-v3';
+const CACHE_NAME = 'therapy-on-way-v4';
 const APP_SHELL = [
   './',
   './index.html',
