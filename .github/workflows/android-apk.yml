@@ -38,7 +38,7 @@ jobs:
 
       - name: Build customer and provider APKs
         working-directory: android
-        run: gradle :app:assembleDebug :customer:assembleDebug --no-daemon --stacktrace
+        run: gradle clean :app:assembleDebug :customer:assembleDebug --no-daemon --stacktrace
 
       - name: Verify APK exists
         working-directory: android
@@ -51,8 +51,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.4.1 >/dev/null 2>&1 || gh release create v1.4.1 --title "TherapyOnWay Provider Android App v1.4.1" --notes "Provider/Admin operations app for TherapyOnWay."
+          gh release view v1.4.2 >/dev/null 2>&1 || gh release create v1.4.1 --title "TherapyOnWay Provider Android App v1.4.2" --notes "Provider/Admin operations app for TherapyOnWay."
           gh release upload v1.4.1 android/app/build/outputs/apk/debug/app-debug.apk --clobber
-          gh release view v1.0.4 >/dev/null 2>&1 || gh release create v1.0.4 --title "TherapyOnWay Customer Android App v1.0.4" --notes "Customer booking app for TherapyOnWay."
+          gh release view v1.0.5 >/dev/null 2>&1 || gh release create v1.0.4 --title "TherapyOnWay Customer Android App v1.0.5" --notes "Customer booking app for TherapyOnWay."
           gh release upload v1.0.4 android/customer/build/outputs/apk/debug/customer-debug.apk --clobber
 
