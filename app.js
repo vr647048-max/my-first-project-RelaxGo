@@ -131,10 +131,10 @@ const bookingForm = document.getElementById("bookingForm");
 if (bookingForm) {
   const paymentRadios = [...bookingForm.querySelectorAll('input[name="payment_method"]')];
   const submitButton = bookingForm.querySelector('#bookingSubmit') || bookingForm.querySelector('button[type="submit"]');
-  function selectedPaymentMethod(){ return 'online'; }
+  function selectedPaymentMethod(){ return paymentRadios.find(r=>r.checked)?.value || 'online'; }
   function updatePaymentButton(){
     if (!submitButton || bookingSubmitting) return;
-    submitButton.textContent = 'Pay & Confirm Booking';
+    submitButton.textContent = selectedPaymentMethod()==='cash' ? 'Confirm Cash Booking' : 'Pay & Confirm Booking';
   }
   paymentRadios.forEach(r=>r.addEventListener('change',updatePaymentButton));
 
@@ -145,7 +145,7 @@ if (bookingForm) {
     if (!sb) { alert("Supabase SDK/config is not loaded. Please refresh once."); return; }
 
     bookingSubmitting = true;
-    const paymentMethod = 'online';
+    const paymentMethod = selectedPaymentMethod();
     const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;updatePaymentButton();} };
     if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Preparing secure payment…"; }
 
@@ -171,6 +171,34 @@ if (bookingForm) {
         customer_lng: coords.lng,
         customer_accuracy: coords.accuracy
       };
+
+      if (paymentMethod === 'cash') {
+        if (submitButton) submitButton.textContent = "Confirming cash booking…";
+        const cash = await sb.rpc("create_cash_booking", {
+          p_customer_name: booking.customer_name,
+          p_customer_phone: booking.customer_phone,
+          p_service: booking.service,
+          p_price: booking.price,
+          p_booking_date: booking.booking_date,
+          p_booking_time: booking.booking_time,
+          p_customer_lat: booking.customer_lat,
+          p_customer_lng: booking.customer_lng,
+          p_customer_accuracy: booking.customer_accuracy
+        });
+        if (cash.error) throw new Error(cash.error.message || "Cash booking could not be created.");
+        const saved = cash.data?.booking;
+        if (!saved?.booking_code) throw new Error("Cash booking was not created.");
+        const trackingId = saved.booking_code;
+        bookingForm.classList.add("hidden");
+        const s = document.getElementById("bookingSuccess");
+        s.classList.remove("hidden");
+        const phone = String(saved.customer_phone||"").replace(/\\D/g,"");
+        const wa = phone ? "https://wa.me/91"+phone+"?text="+encodeURIComponent("TherapyOnWay Cash Booking\\n\\nID: "+trackingId+"\\nService: "+saved.service+"\\nAmount: ₹"+saved.price+"\\nDate: "+saved.booking_date+"\\nTime: "+saved.booking_time) : "#";
+        const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+        s.innerHTML = `<h3>✅ Cash booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code><p>Pay ₹${safe(saved.price)} to the provider at your appointment.</p><a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a>`;
+        reset();
+        return;
+      }
 
       const order = await paymentApi({ action: "create_order", service, price, booking });
       await loadRazorpay();
