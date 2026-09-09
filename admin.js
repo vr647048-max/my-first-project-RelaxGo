@@ -72,10 +72,19 @@ function card(b){
  const call=b.customer_phone?'<a class="secondary" href="tel:'+esc(b.customer_phone)+'">☎ Call</a>':"";
  const statusBtn=next?'<button class="accept" data-action="status" data-id="'+esc(id)+'" data-status="'+esc(next)+'">'+(next==="On the Way"?"🚗 On the Way":next==="Arrived"?"📍 Arrived":next==="Completed"?"✓ Complete":"✓ "+esc(next))+'</button>':"";
  const gpsBtn=["Accepted","On the Way","Arrived"].includes(current)?'<button class="map" data-action="gps" data-id="'+esc(id)+'">📡 '+(watches.has(id)?"Sharing Live Location":"Share Live Location")+'</button>':"";
+ const cashBtn=(String(b.payment_method||"online")==="cash" && pay!=="paid") ? '<button class="accept" data-action="cash" data-id="'+esc(id)+'">💵 Mark Cash Collected</button>' : "";
  const chat='<button class="secondary" data-action="chat" data-id="'+esc(id)+'">💬 Chat with Customer</button>';
- return '<article class="booking"><div class="booking-top"><div><div class="booking-id">'+esc(code)+'</div><h2>'+esc(b.customer_name)+'</h2><div>'+esc(b.service)+' • ₹'+Number(b.price||0).toLocaleString("en-IN")+' • '+(String(b.payment_method||"online")==="cash"?"💵 Cash":"💳 Online")+' • '+payLabel+'</div></div><span class="status">'+esc(current)+'</span></div><div class="booking-info"><div class="info"><small>Appointment</small>'+esc(b.booking_date)+' • '+esc(b.booking_time)+'</div><div class="info"><small>Phone</small>'+esc(b.customer_phone)+'</div><div class="info"><small>Customer GPS</small>'+(b.customer_lat!=null&&b.customer_lng!=null?Number(b.customer_lat).toFixed(6)+", "+Number(b.customer_lng).toFixed(6):"Unavailable")+'</div></div><div class="booking-actions">'+nav+wa+call+statusBtn+gpsBtn+chat+'</div></article>';
+ return '<article class="booking"><div class="booking-top"><div><div class="booking-id">'+esc(code)+'</div><h2>'+esc(b.customer_name)+'</h2><div>'+esc(b.service)+' • ₹'+Number(b.price||0).toLocaleString("en-IN")+' • '+(String(b.payment_method||"online")==="cash"?"💵 Cash":"💳 Online")+' • '+payLabel+'</div></div><span class="status">'+esc(current)+'</span></div><div class="booking-info"><div class="info"><small>Appointment</small>'+esc(b.booking_date)+' • '+esc(b.booking_time)+'</div><div class="info"><small>Phone</small>'+esc(b.customer_phone)+'</div><div class="info"><small>Customer GPS</small>'+(b.customer_lat!=null&&b.customer_lng!=null?Number(b.customer_lat).toFixed(6)+", "+Number(b.customer_lng).toFixed(6):"Unavailable")+'</div></div><div class="booking-actions">'+nav+wa+call+statusBtn+gpsBtn+chat+''+cashBtn+'</div></article>';
 }
 
+async function markCashCollected(id){
+ const target=bookings.find(b=>String(b.id)===String(id));
+ if(!target || String(target.payment_method||"online")!=="cash" || String(target.payment_status||"unpaid").toLowerCase()==="paid") return;
+ if(!confirm("Confirm that ₹"+Number(target.price||0).toLocaleString("en-IN")+" cash was collected from the customer?")) return;
+ const {error}=await sb.from("bookings").update({payment_status:"paid",paid_at:new Date().toISOString()}).eq("id",id);
+ if(error){alert("Could not mark cash collected: "+error.message);return;}
+ await load();
+}
 async function setStatus(id,status){
  const target=bookings.find(b=>String(b.id)===String(id));
  if(!target){alert("Booking not found. Refresh the dashboard.");return;}
@@ -146,6 +155,7 @@ $("bookingList")?.addEventListener("click",async e=>{
  if(action==="status"){await setStatus(id,btn.dataset.status);}
  if(action==="gps"){if(watches.has(id))setGpsState(id,"📡 Live location sharing.",true);else await startGPS(id,false);}
  if(action==="chat")await openChat(id);
+ if(action==="cash")await markCashCollected(id);
 });
 
 async function openChat(id){
@@ -167,7 +177,7 @@ function closeChat(){if(chatChannel)sb.removeChannel(chatChannel);chatChannel=nu
 $("chatForm")?.addEventListener("submit",async e=>{
  e.preventDefault();if(!chatBookingId||!currentUser)return;
  const input=$("chatInput"),message=input.value.trim();if(!message)return;
- const {error}=await sb.from("booking_messages").insert({booking_id:chatBookingId,sender_role:isAdmin?"admin":"provider",sender_user_id:currentUser.id,message});
+ const {data:sent,error}=await sb.rpc("send_provider_chat",{p_booking_id:chatBookingId,p_message:message});
  if(error){alert("Message could not be sent: "+error.message);return;}input.value="";await loadChat();
 });
 window.closeChat=closeChat;
