@@ -145,7 +145,7 @@ if (bookingForm) {
     if (!sb) { alert("Supabase SDK/config is not loaded. Please refresh once."); return; }
 
     bookingSubmitting = true;
-    const paymentMethod = selectedPaymentMethod();
+    const paymentMethod = 'online';
     const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;updatePaymentButton();} };
     if (submitButton) { submitButton.disabled = true; submitButton.textContent = paymentMethod==='cash' ? "Creating cash booking…" : "Preparing secure payment…"; }
 
@@ -171,19 +171,6 @@ if (bookingForm) {
         customer_lng: coords.lng,
         customer_accuracy: coords.accuracy
       };
-
-      if (paymentMethod === 'cash') {
-        const created = await paymentApi({action:'create_cash_booking', booking});
-        const saved = created.booking;
-        const trackingId = saved.booking_code;
-        bookingForm.classList.add("hidden");
-        const s = document.getElementById("bookingSuccess");
-        s.classList.remove("hidden");
-        const safe = value => String(value).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-        const wa = "https://wa.me/" + String(C.BUSINESS_WHATSAPP || C.BUSINESS_PHONE || "").replace(/\D/g,"") + "?text=" + encodeURIComponent(`New TherapyOnWay Cash Booking\n\nID: ${trackingId}\nName: ${saved.customer_name}\nService: ${saved.service}\nAmount: ₹${saved.price}\nDate: ${saved.booking_date}\nTime: ${saved.booking_time}\nLocation: https://www.google.com/maps?q=${saved.customer_lat},${saved.customer_lng}`);
-        s.innerHTML = `<h3>✅ Cash booking confirmed</h3><p>Your Booking ID</p><code>${safe(trackingId)}</code><p>Amount due on service: ₹${safe(saved.price)}. Please pay the provider after the session.</p><a class="btn primary full" href="track.html?id=${encodeURIComponent(trackingId)}">Track Booking</a><a class="btn secondary full" style="margin-top:8px" target="_blank" rel="noopener" href="${wa}">Send booking details on WhatsApp</a>`;
-        return;
-      }
 
       const order = await paymentApi({ action: "create_order", service, price });
       await loadRazorpay();
