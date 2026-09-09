@@ -131,10 +131,10 @@ const bookingForm = document.getElementById("bookingForm");
 if (bookingForm) {
   const paymentRadios = [...bookingForm.querySelectorAll('input[name="payment_method"]')];
   const submitButton = bookingForm.querySelector('#bookingSubmit') || bookingForm.querySelector('button[type="submit"]');
-  function selectedPaymentMethod(){ return (paymentRadios.find(r=>r.checked)?.value || 'online'); }
+  function selectedPaymentMethod(){ return 'online'; }
   function updatePaymentButton(){
     if (!submitButton || bookingSubmitting) return;
-    submitButton.textContent = selectedPaymentMethod()==='cash' ? 'Confirm Cash Booking' : 'Pay & Confirm Booking';
+    submitButton.textContent = 'Pay & Confirm Booking';
   }
   paymentRadios.forEach(r=>r.addEventListener('change',updatePaymentButton));
 
