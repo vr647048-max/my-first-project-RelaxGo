@@ -147,7 +147,7 @@ if (bookingForm) {
     bookingSubmitting = true;
     const paymentMethod = 'online';
     const reset = () => { bookingSubmitting=false; if(submitButton){submitButton.disabled=false;updatePaymentButton();} };
-    if (submitButton) { submitButton.disabled = true; submitButton.textContent = paymentMethod==='cash' ? "Creating cash booking…" : "Preparing secure payment…"; }
+    if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Preparing secure payment…"; }
 
     try {
       const serviceValue = document.getElementById("service").value;
@@ -172,7 +172,7 @@ if (bookingForm) {
         customer_accuracy: coords.accuracy
       };
 
-      const order = await paymentApi({ action: "create_order", service, price });
+      const order = await paymentApi({ action: "create_order", service, price, booking });
       await loadRazorpay();
       if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded. Please check your internet connection.");
       if (submitButton) submitButton.textContent = "Waiting for payment…";
