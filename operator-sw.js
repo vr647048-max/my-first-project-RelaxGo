@@ -1,0 +1,1 @@
+const CACHE='tow-operator-v1';self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['operator.html','admin.js','style.css','config.js','assets/logo.svg'])))});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});
