@@ -191,23 +191,19 @@ if (bookingForm) {
 
       if (paymentMethod === 'cash') {
         if (submitButton) submitButton.textContent = "Confirming cash booking…";
-        const cash = await sb.from("bookings").insert({
-          booking_code: code(),
-          customer_name: booking.customer_name,
-          customer_phone: booking.customer_phone,
-          service: booking.service,
-          price: booking.price,
-          booking_date: booking.booking_date,
-          booking_time: booking.booking_time,
-          customer_lat: booking.customer_lat,
-          customer_lng: booking.customer_lng,
-          customer_accuracy: booking.customer_accuracy,
-          status: "New",
-          payment_status: "unpaid",
-          payment_method: "cash"
-        }).select("booking_code,customer_name,customer_phone,service,price,booking_date,booking_time,status,payment_status,payment_method").single();
+        const cash = await sb.rpc("create_cash_booking", {
+          p_customer_name: booking.customer_name,
+          p_customer_phone: booking.customer_phone,
+          p_service: booking.service,
+          p_price: booking.price,
+          p_booking_date: booking.booking_date,
+          p_booking_time: booking.booking_time,
+          p_customer_lat: booking.customer_lat,
+          p_customer_lng: booking.customer_lng,
+          p_customer_accuracy: booking.customer_accuracy
+        });
         if (cash.error) throw new Error(cash.error.message || "Cash booking could not be created.");
-        const saved = cash.data;
+        const saved = cash.data?.booking;
         if (!saved?.booking_code) throw new Error("Cash booking was not created.");
         const trackingId = saved.booking_code;
         bookingForm.classList.add("hidden");
