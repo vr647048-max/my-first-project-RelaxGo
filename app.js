@@ -117,14 +117,31 @@ async function loadRazorpay(){
 
 async function paymentApi(payload){
   const endpoint = String(C.PAYMENT_FUNCTION_URL || (String(C.SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/razorpay-payment"));
-  const r = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": C.SUPABASE_ANON_KEY, "Authorization": "Bearer " + C.SUPABASE_ANON_KEY },
-    body: JSON.stringify(payload)
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || "Payment service unavailable.");
-  return data;
+  let lastError;
+  for(let attempt=0; attempt<2; attempt++){
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 20000);
+    try{
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": C.SUPABASE_ANON_KEY, "Authorization": "Bearer " + C.SUPABASE_ANON_KEY },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (attempt===0 && (r.status===502 || r.status===503 || r.status===504)) { lastError = new Error(data.error || "Payment service is temporarily unavailable."); continue; }
+        throw new Error(data.error || "Payment service unavailable.");
+      }
+      return data;
+    }catch(e){
+      clearTimeout(timer);
+      lastError = e;
+      if(attempt===0) continue;
+    }
+  }
+  throw new Error(lastError?.name==="AbortError" ? "Payment server timed out. Please try again." : (lastError?.message || "Payment service unavailable."));
 }
 
 const bookingForm = document.getElementById("bookingForm");
