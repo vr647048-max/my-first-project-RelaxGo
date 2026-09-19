@@ -191,7 +191,7 @@ if (bookingForm) {
         }).select("booking_code,customer_name,customer_phone,service,price,booking_date,booking_time,status,payment_status,payment_method").single();
         if (cash.error) throw new Error(cash.error.message || "Cash booking could not be created.");
         const saved = cash.data;
- throw new Error("Cash booking was not created.");
+        if (!saved?.booking_code) throw new Error("Cash booking was not created.");
         const trackingId = saved.booking_code;
         bookingForm.classList.add("hidden");
         const s = document.getElementById("bookingSuccess");
