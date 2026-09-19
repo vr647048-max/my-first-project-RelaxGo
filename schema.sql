@@ -137,7 +137,26 @@ create policy "public can create bookings"
 on public.bookings for insert to anon, authenticated
 with check (
   coalesce(btrim(customer_name),'') <> ''
-  and customer_phone ~ '^[0-9]{10}
+  and customer_phone ~ '^[0-9]{10}$'
+  and (
+    (service='Full Body Massage' and price=999)
+    or (service='Head Massage' and price=499)
+    or (service='Shoulder Massage' and price=549)
+    or (service='Back Massage' and price=699)
+    or (service='Hand Massage' and price=349)
+    or (service='Neck Massage' and price=349)
+  )
+  and booking_date is not null
+  and booking_time is not null
+  and customer_lat between -90 and 90
+  and customer_lng between -180 and 180
+  and coalesce(status,'New')='New'
+  and provider_id is null
+  and provider_lat is null
+  and provider_lng is null
+  and coalesce(payment_status,'unpaid')='unpaid'
+  and (payment_method is null or payment_method='cash')
+);
 
 create policy "admin or provider can read bookings"
 on public.bookings for select to authenticated
