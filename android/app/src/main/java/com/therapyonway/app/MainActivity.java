@@ -31,6 +31,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        // Always load the current TherapyOnWay web app so booking/payment fixes
+        // published on GitHub Pages are picked up without stale WebView cache.
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setGeolocationEnabled(true);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
