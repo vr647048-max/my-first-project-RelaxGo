@@ -191,19 +191,28 @@ if (bookingForm) {
 
       if (paymentMethod === 'cash') {
         if (submitButton) submitButton.textContent = "Confirming cash booking…";
-        const cash = await sb.rpc("create_cash_booking", {
-          p_customer_name: booking.customer_name,
-          p_customer_phone: booking.customer_phone,
-          p_service: booking.service,
-          p_price: booking.price,
-          p_booking_date: booking.booking_date,
-          p_booking_time: booking.booking_time,
-          p_customer_lat: booking.customer_lat,
-          p_customer_lng: booking.customer_lng,
-          p_customer_accuracy: booking.customer_accuracy
-        });
-        if (cash.error) throw new Error(cash.error.message || "Cash booking could not be created.");
-        const saved = cash.data?.booking;
+        const cashEndpoint = String(C.SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/create-cash-booking";
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20000);
+        let cash;
+        try {
+          const response = await fetch(cashEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": C.SUPABASE_ANON_KEY,
+              "Authorization": "Bearer " + C.SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify(booking),
+            signal: controller.signal
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || "Cash booking could not be created.");
+          cash = data;
+        } finally {
+          clearTimeout(timer);
+        }
+        const saved = cash?.booking;
         if (!saved?.booking_code) throw new Error("Cash booking was not created.");
         const trackingId = saved.booking_code;
         bookingForm.classList.add("hidden");
