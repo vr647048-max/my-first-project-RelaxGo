@@ -266,6 +266,39 @@ if (bookingForm) {
     }
   });
   updatePaymentButton();
+
+  // Keep customers out of the Razorpay TEST-mode error state.
+  // When Live Mode is approved, the same check automatically re-enables Online Payment.
+  (async () => {
+    try {
+      const endpoint = String(C.PAYMENT_FUNCTION_URL || (String(C.SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/razorpay-payment"));
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": C.SUPABASE_ANON_KEY, "Authorization": "Bearer " + C.SUPABASE_ANON_KEY },
+        body: JSON.stringify({ action: "payment_status" })
+      });
+      const status = await r.json().catch(() => ({}));
+      const online = paymentRadios.find(r => r.value === "online");
+      const cash = paymentRadios.find(r => r.value === "cash");
+      const note = document.getElementById("paymentNote");
+      const live = status?.available === true;
+      if (online) {
+        online.disabled = !live;
+        if (!live) online.checked = false;
+      }
+      if (!live && cash) cash.checked = true;
+      if (note) note.textContent = live
+        ? "🔒 Online: Razorpay Live Mode is active. UPI/cards/netbanking appear according to your Razorpay account settings. Cash: pay the provider at the appointment."
+        : "🔒 Online payment is temporarily unavailable while Razorpay Live Mode approval is pending. Cash booking is available now.";
+      updatePaymentButton();
+    } catch (_) {
+      const online = paymentRadios.find(r => r.value === "online");
+      const cash = paymentRadios.find(r => r.value === "cash");
+      if (online) { online.disabled = true; online.checked = false; }
+      if (cash) cash.checked = true;
+      updatePaymentButton();
+    }
+  })();
 }
 function goTrack(){
   const el = document.getElementById("trackId");
